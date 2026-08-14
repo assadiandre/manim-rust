@@ -81,4 +81,7 @@ crates/
 - M5 typst math -> paths, golden render
 - M6 PyO3 API: Scene, mobjects, play(), render()
 - M7 north-star demo: circle morphs to square while $e^{i\pi}+1=0$ fades in
+- M9 authoring surface (ManimCE-inspired): directions, bbox layout
+  (`move_to`/`next_to`/`arrange`), richer geometry (arc/arrow/ellipse),
+  Rotate/Uncreate/Write/Grow/Indicate, NumberLine/Axes + baked plots
 - M8 (later) 3D spike: cube pass composited under 2D overlay

@@ -83,6 +83,34 @@ fn golden_shape_gallery() {
 }
 
 #[test]
+fn golden_authoring_gallery() {
+    let scene = manim_scenes::probes()
+        .into_iter()
+        .find(|p| p.name == "geometry")
+        .expect("geometry probe");
+    let mut sim = scene.scene.graph.clone();
+    scene.scene.timeline.apply(&mut sim, 0.0);
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    let px = r.render_frame(&mut sim).unwrap().to_vec();
+    assert_golden(&px, 480, 270, "authoring_gallery.png");
+}
+
+#[test]
+fn golden_layout_and_axes() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    for name in ["layout", "axes"] {
+        let scene = manim_scenes::probes()
+            .into_iter()
+            .find(|p| p.name == name)
+            .unwrap_or_else(|| panic!("{name} probe"));
+        let mut sim = scene.scene.graph.clone();
+        scene.scene.timeline.apply(&mut sim, 0.0);
+        let px = r.render_frame(&mut sim).unwrap().to_vec();
+        assert_golden(&px, 480, 270, &format!("{name}.png"));
+    }
+}
+
+#[test]
 fn frame_reuse_meets_budget() {
     let mut scene = SceneGraph::new();
     for i in 0..1000 {

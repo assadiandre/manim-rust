@@ -4,7 +4,10 @@
 
 use kurbo::{Affine, Point, Vec2};
 use manim_anim::{Animation, Scene};
-use manim_core::{geometry, palette, Mobject, Style};
+use manim_core::constants::{LEFT, RIGHT};
+use manim_core::{
+    add_arrow, add_axes, geometry, palette, AxesOpts, Mobject, Style,
+};
 use manim_typst::{add_math, MathOptions};
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
@@ -122,6 +125,128 @@ pub fn probes() -> Vec<Probe> {
         add_math(&mut s.graph, f, &MathOptions::default()).expect("typst compile failed");
         out.push(probe(&format!("tex_{i}"), s, &[0.0]));
     }
+
+    // layout: next_to / arrange, static.
+    let mut s = Scene::new();
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 0.8))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    let sq = s.add(
+        Mobject::new(geometry::square(Point::ORIGIN, 1.2))
+            .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 4.0)),
+    );
+    let tri = s.add(
+        Mobject::new(geometry::triangle(Point::ORIGIN, 0.8))
+            .with_style(Style::filled(palette::green()).with_stroke(palette::white(), 4.0)),
+    );
+    s.graph.next_to(sq, c, LEFT, 0.3);
+    s.graph.next_to(tri, c, RIGHT, 0.3);
+    out.push(probe("layout", s, &[0.0]));
+
+    // geometry gallery: the new primitives, static.
+    let mut s = Scene::new();
+    s.add(
+        Mobject::new(geometry::ellipse(Point::new(-4.0, 2.0), 1.2, 0.6))
+            .with_style(Style::filled(palette::teal()).with_stroke(palette::white(), 4.0)),
+    );
+    s.add(
+        Mobject::new(geometry::arc(Point::new(-1.5, 2.0), 0.9, 0.3, 4.0))
+            .with_style(Style::default().with_stroke(palette::gold(), 6.0).no_fill()),
+    );
+    s.add(
+        Mobject::new(geometry::sector(Point::new(1.5, 2.0), 0.9, 0.4, 2.0))
+            .with_style(Style::filled(palette::orange()).with_stroke(palette::white(), 3.0)),
+    );
+    s.add(
+        Mobject::new(geometry::annulus(Point::new(4.0, 2.0), 0.4, 0.9))
+            .with_style(Style::filled(palette::purple()).no_stroke()),
+    );
+    s.add(
+        Mobject::new(geometry::rounded_rect(Point::new(-4.0, -1.5), 2.0, 1.2, 0.3))
+            .with_style(Style::filled(palette::maroon()).with_stroke(palette::white(), 4.0)),
+    );
+    s.add(
+        Mobject::new(geometry::dashed_line(
+            Point::new(-2.2, -1.5),
+            Point::new(0.4, -0.6),
+            0.18,
+            0.1,
+        ))
+        .with_style(Style::default().with_stroke(palette::yellow(), 5.0).no_fill()),
+    );
+    add_arrow(
+        &mut s.graph,
+        Point::new(1.0, -2.0),
+        Point::new(4.2, -0.6),
+        0.0,
+        0.35,
+        Style::default().with_stroke(palette::gold(), 6.0),
+    );
+    out.push(probe("geometry", s, &[0.0]));
+
+    // rotate a triangle a quarter turn (a square would look unchanged at 90°).
+    let mut s = Scene::new();
+    let tri = s.add(
+        Mobject::new(geometry::triangle(Point::ORIGIN, 1.6))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play([Animation::rotate(&s.graph, tri, std::f64::consts::FRAC_PI_2, 1.0)]);
+    out.push(probe("rotate", s, &[0.0, 0.5, 1.0]));
+
+    // uncreate a circle.
+    let mut s = Scene::new();
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.5))
+            .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play([Animation::uncreate(&s.graph, c, 1.0)]);
+    out.push(probe("uncreate", s, &[0.0, 0.5, 1.0]));
+
+    // grow from center.
+    let mut s = Scene::new();
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.5))
+            .with_style(Style::filled(palette::green()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play([Animation::grow_from_center(&s.graph, c, 1.0)]);
+    out.push(probe("grow", s, &[0.0, 0.5, 1.0]));
+
+    // indicate pulse.
+    let mut s = Scene::new();
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.2))
+            .with_style(Style::filled(palette::yellow()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play([Animation::indicate(&s.graph, c, 1.0)]);
+    out.push(probe("indicate", s, &[0.0, 0.5, 1.0]));
+
+    // write a formula glyph-by-glyph.
+    let mut s = Scene::new();
+    let tex = add_math(&mut s.graph, "e^{i pi} + 1 = 0", &MathOptions::default())
+        .expect("typst compile failed");
+    s.play_write(tex, 1.5);
+    out.push(probe("write", s, &[0.0, 0.4, 0.8, 1.2, 1.5]));
+
+    // axes + a baked parabola.
+    let mut s = Scene::new();
+    add_axes(
+        &mut s.graph,
+        &AxesOpts {
+            x_min: -3.0,
+            x_max: 3.0,
+            y_min: -1.0,
+            y_max: 3.0,
+            unit_size: 1.0,
+            ..AxesOpts::default()
+        },
+        Style::default().with_stroke(palette::gray(), 3.0),
+    );
+    s.add(
+        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x))
+            .with_style(Style::default().with_stroke(palette::yellow(), 5.0).no_fill()),
+    );
+    out.push(probe("axes", s, &[0.0]));
 
     out
 }

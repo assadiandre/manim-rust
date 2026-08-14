@@ -65,6 +65,19 @@ scene.wait(0.5)
 scene.render("media/demo.mp4", fps=60)
 ```
 
+Layout, arrows, and axes follow ManimCE names (`next_to`, `arrange`,
+`Write`, `Indicate`). Function plots are sampled once at authoring time —
+the per-frame path never calls back into Python:
+
+```python
+axes = scene.add_axes(x_min=-3, x_max=3, y_min=-1, y_max=3)
+plot = scene.add_function(lambda x: 0.35 * x * x, -2.2, 2.2, stroke="yellow")
+label = scene.add_tex(r"y = 0.35 x^2")
+scene.next_to(label, plot, "up")
+scene.play_create(axes)
+scene.play_write(label)
+```
+
 ## Tests
 
 ```bash
