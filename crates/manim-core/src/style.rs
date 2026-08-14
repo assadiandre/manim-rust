@@ -25,6 +25,24 @@ pub mod palette {
     pub fn gray() -> Color {
         Color::from_rgba8(136, 136, 136, 255)
     }
+    pub fn teal() -> Color {
+        Color::from_rgba8(92, 208, 179, 255) // TEAL_C
+    }
+    pub fn orange() -> Color {
+        Color::from_rgba8(255, 134, 47, 255)
+    }
+    pub fn purple() -> Color {
+        Color::from_rgba8(154, 114, 172, 255) // PURPLE_C
+    }
+    pub fn pink() -> Color {
+        Color::from_rgba8(209, 71, 189, 255)
+    }
+    pub fn gold() -> Color {
+        Color::from_rgba8(240, 172, 95, 255) // GOLD_C
+    }
+    pub fn maroon() -> Color {
+        Color::from_rgba8(197, 95, 115, 255) // MAROON_C
+    }
 }
 
 /// Multiply a color's alpha by `opacity` (0..=1).

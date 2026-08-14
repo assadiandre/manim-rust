@@ -121,6 +121,65 @@ impl SceneGraph {
         &self.nodes[id].children
     }
 
+    pub fn parent(&self, id: NodeId) -> Option<NodeId> {
+        self.nodes[id].parent
+    }
+
+    /// Reparent `id` under `new_parent` (or to a root if `None`), preserving
+    /// the current world transform so the object does not jump.
+    pub fn reparent(&mut self, id: NodeId, new_parent: Option<NodeId>) {
+        let world = self.world_transform(id);
+        if let Some(old) = self.nodes[id].parent {
+            self.nodes[old].children.retain(|&c| c != id);
+            self.mark_dirty(old);
+        } else {
+            self.roots.retain(|&r| r != id);
+        }
+        self.nodes[id].parent = new_parent;
+        if let Some(p) = new_parent {
+            self.nodes[p].children.push(id);
+            let parent_world = self.world_transform(p);
+            self.nodes[id].mobject.transform = parent_world.inverse() * world;
+            self.mark_dirty(p);
+        } else {
+            self.nodes[id].mobject.transform = world;
+            self.roots.push(id);
+            self.mark_dirty(id);
+        }
+    }
+
+    /// Wrap `ids` in a new group, preserving each child's world transform.
+    pub fn group_nodes(&mut self, ids: &[NodeId]) -> NodeId {
+        let g = self.add(Mobject::group());
+        for &id in ids {
+            if id != g {
+                self.reparent(id, Some(g));
+            }
+        }
+        g
+    }
+
+    /// Path-bearing leaves under `id` (the node itself if it has a path and
+    /// no children). Used by Create/Write on groups such as Typst formulas.
+    pub fn path_leaves(&self, id: NodeId) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        self.collect_path_leaves(id, &mut out);
+        out
+    }
+
+    fn collect_path_leaves(&self, id: NodeId, out: &mut Vec<NodeId>) {
+        let children = &self.nodes[id].children;
+        if children.is_empty() {
+            if !self.nodes[id].mobject.path.elements().is_empty() {
+                out.push(id);
+            }
+            return;
+        }
+        for &c in children {
+            self.collect_path_leaves(c, out);
+        }
+    }
+
     /// local-to-world transform, walking up the parent chain.
     pub fn world_transform(&self, id: NodeId) -> Affine {
         let mut t = self.nodes[id].mobject.transform;

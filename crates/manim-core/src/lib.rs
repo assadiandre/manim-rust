@@ -7,12 +7,21 @@
 //!   renderer can skip unchanged frames.
 
 pub mod camera;
+pub mod constants;
+pub mod construct;
 pub mod geometry;
+pub mod layout;
 pub mod mobject;
 pub mod scene;
 pub mod style;
 
 pub use camera::{Camera, OrthoCamera2D};
+pub use constants::{
+    DEGREES, DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DOT_RADIUS, DEFAULT_MOBJECT_TO_EDGE_BUFFER,
+    DEFAULT_MOBJECT_TO_MOBJECT_BUFFER, DOWN, DL, DR, FRAME_HEIGHT, FRAME_WIDTH, FRAME_X_RADIUS,
+    FRAME_Y_RADIUS, LEFT, MED_SMALL_BUFF, ORIGIN, PI, RIGHT, TAU, UL, UP, UR,
+};
+pub use construct::{add_arrow, add_axes, add_dot, add_number_line, AxesOpts, NumberLineOpts};
 pub use mobject::Mobject;
 pub use scene::{NodeId, SceneGraph};
 pub use style::{palette, Style};

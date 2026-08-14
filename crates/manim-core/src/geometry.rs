@@ -4,7 +4,11 @@
 //! Everything is a flat `BezPath`; resampling converts to polylines so two
 //! arbitrary paths always have a common parameterization for interpolation.
 
-use kurbo::{BezPath, Circle, ParamCurveArclen, PathEl, Point, Rect, Shape, Vec2};
+use kurbo::{
+    Arc, BezPath, Circle, Ellipse, ParamCurveArclen, PathEl, Point, Rect, RoundedRect, Shape, Vec2,
+};
+
+use crate::constants::{DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DASH_LENGTH};
 
 /// Tolerance for curve flattening, in logical units. At the default camera
 /// (8 units = 1080 px) 1e-3 units is well under a pixel.
@@ -47,6 +51,138 @@ pub fn regular_polygon(center: Point, sides: usize, radius: f64, rotation: f64) 
 
 pub fn triangle(center: Point, radius: f64) -> BezPath {
     regular_polygon(center, 3, radius, std::f64::consts::FRAC_PI_2)
+}
+
+pub fn ellipse(center: Point, rx: f64, ry: f64) -> BezPath {
+    Ellipse::new(center, (rx, ry), 0.0).to_path(FLATTEN_TOL)
+}
+
+/// Circular arc. `start_angle` and `sweep` are radians; 0 is +x, CCW positive
+/// (Manim / standard math).
+pub fn arc(center: Point, radius: f64, start_angle: f64, sweep: f64) -> BezPath {
+    Arc::new(center, (radius, radius), start_angle, sweep, 0.0).to_path(FLATTEN_TOL)
+}
+
+/// Pie slice: arc plus radii to the center.
+pub fn sector(center: Point, radius: f64, start_angle: f64, sweep: f64) -> BezPath {
+    let mut p = arc(center, radius, start_angle, sweep);
+    p.line_to(center);
+    p.close_path();
+    p
+}
+
+/// Filled ring. Outer CCW, inner CW so NonZero fill punches a hole.
+pub fn annulus(center: Point, inner: f64, outer: f64) -> BezPath {
+    let mut p = circle(center, outer);
+    let n = 64;
+    for i in 0..=n {
+        let a = -(i as f64) / n as f64 * std::f64::consts::TAU;
+        let pt = center + Vec2::new(a.cos() * inner, a.sin() * inner);
+        if i == 0 {
+            p.move_to(pt);
+        } else {
+            p.line_to(pt);
+        }
+    }
+    p.close_path();
+    p
+}
+
+pub fn rounded_rect(center: Point, width: f64, height: f64, radius: f64) -> BezPath {
+    let rect = Rect::from_center_size(center, (width, height));
+    RoundedRect::from_rect(rect, radius).to_path(FLATTEN_TOL)
+}
+
+pub fn polygon(points: &[Point]) -> BezPath {
+    points_to_path(points, true)
+}
+
+pub fn polyline(points: &[Point]) -> BezPath {
+    points_to_path(points, false)
+}
+
+/// Shorten both ends of a segment by `buff` (Manim `Line(buff=...)`).
+pub fn shorten(start: Point, end: Point, buff: f64) -> (Point, Point) {
+    shorten_asymmetric(start, end, buff, buff)
+}
+
+pub fn shorten_asymmetric(start: Point, end: Point, head: f64, tail: f64) -> (Point, Point) {
+    let v = end - start;
+    let len = v.hypot();
+    if len <= head + tail + 1e-9 {
+        let mid = start.lerp(end, 0.5);
+        return (mid, mid);
+    }
+    let dir = v / len;
+    (start + dir * head, end - dir * tail)
+}
+
+pub fn dashed_line(a: Point, b: Point, dash: f64, gap: f64) -> BezPath {
+    let dash = dash.max(1e-6);
+    let gap = gap.max(0.0);
+    let v = b - a;
+    let len = v.hypot();
+    if len < 1e-12 {
+        return BezPath::new();
+    }
+    let dir = v / len;
+    let mut path = BezPath::new();
+    let mut s = 0.0;
+    let period = dash + gap;
+    while s < len - 1e-12 {
+        let e = (s + dash).min(len);
+        path.move_to(a + dir * s);
+        path.line_to(a + dir * e);
+        s += period;
+    }
+    path
+}
+
+pub fn dashed_line_default(a: Point, b: Point) -> BezPath {
+    dashed_line(a, b, DEFAULT_DASH_LENGTH * 3.0, DEFAULT_DASH_LENGTH * 2.0)
+}
+
+/// Shaft of an arrow: line from `start` to the tip base.
+pub fn arrow_shaft(start: Point, end: Point, tip_length: f64) -> BezPath {
+    let v = end - start;
+    let len = v.hypot();
+    let tip = tip_length.min(len * 0.45).max(0.0);
+    if len <= tip + 1e-9 {
+        return BezPath::new();
+    }
+    let dir = v / len;
+    line(start, end - dir * tip)
+}
+
+/// Filled triangular arrow tip pointing at `end`.
+pub fn arrow_tip(start: Point, end: Point, tip_length: f64, tip_width: f64) -> BezPath {
+    let v = end - start;
+    let len = v.hypot();
+    if len < 1e-12 {
+        return BezPath::new();
+    }
+    let dir = v / len;
+    let tip = tip_length.min(len * 0.45).max(0.0);
+    let width = if tip_width <= 0.0 { tip * 0.7 } else { tip_width };
+    let perp = Vec2::new(-dir.y, dir.x);
+    let base = end - dir * tip;
+    polygon(&[end, base + perp * (width * 0.5), base - perp * (width * 0.5)])
+}
+
+pub fn default_tip_length(length: f64) -> f64 {
+    DEFAULT_ARROW_TIP_LENGTH.min(0.25 * length)
+}
+
+/// Sample `f` on `[x_min, x_max]` into a polyline, scaled into scene units.
+pub fn plot(x_min: f64, x_max: f64, samples: usize, unit_x: f64, unit_y: f64, f: impl Fn(f64) -> f64) -> BezPath {
+    let n = samples.max(2);
+    let mut pts = Vec::with_capacity(n);
+    for i in 0..n {
+        let t = i as f64 / (n - 1) as f64;
+        let x = x_min + (x_max - x_min) * t;
+        pts.push(Point::new(x * unit_x, f(x) * unit_y));
+    }
+    polyline(&pts)
 }
 
 /// Total arc length, computed per segment (accurate for curves).

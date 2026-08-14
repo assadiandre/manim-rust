@@ -40,6 +40,49 @@ fn trim_zero_is_empty() {
 }
 
 #[test]
+fn ellipse_is_stretched_circle() {
+    let e = geometry::ellipse(Point::ORIGIN, 2.0, 1.0);
+    let bb = geometry::bounding_box(&e);
+    assert!((bb.width() - 4.0).abs() < 0.05, "w={}", bb.width());
+    assert!((bb.height() - 2.0).abs() < 0.05, "h={}", bb.height());
+}
+
+#[test]
+fn arc_quarter_is_quarter_circle() {
+    let a = geometry::arc(Point::ORIGIN, 1.0, 0.0, PI / 2.0);
+    let len = geometry::path_length(&a);
+    assert!((len - PI / 2.0).abs() < 0.02, "len={len}");
+}
+
+#[test]
+fn dashed_line_is_shorter_than_solid() {
+    let a = Point::new(-2.0, 0.0);
+    let b = Point::new(2.0, 0.0);
+    let solid = geometry::path_length(&geometry::line(a, b));
+    let dashed = geometry::path_length(&geometry::dashed_line(a, b, 0.2, 0.2));
+    assert!(dashed < solid * 0.7 && dashed > solid * 0.3, "dashed={dashed} solid={solid}");
+}
+
+#[test]
+fn arrow_shaft_stops_before_tip() {
+    let start = Point::new(-2.0, 0.0);
+    let end = Point::new(2.0, 0.0);
+    let shaft = geometry::arrow_shaft(start, end, 0.4);
+    let bb = geometry::bounding_box(&shaft);
+    assert!(bb.x1 < 2.0 - 0.3, "shaft should end before the tip, x1={}", bb.x1);
+}
+
+#[test]
+fn plot_samples_a_parabola() {
+    let p = geometry::plot(-1.0, 1.0, 9, 1.0, 1.0, |x| x * x);
+    let (pts, closed) = geometry::flatten_points(&p);
+    assert!(!closed);
+    assert!(pts.len() >= 9);
+    assert!((pts[0].y - 1.0).abs() < 1e-9);
+    assert!(pts[4].y.abs() < 1e-9); // x=0
+}
+
+#[test]
 fn lerp_paths_endpoints_match() {
     let c = geometry::circle(Point::ORIGIN, 1.0);
     let s = geometry::square(Point::ORIGIN, 2.0);
