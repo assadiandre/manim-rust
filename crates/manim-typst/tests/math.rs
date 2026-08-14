@@ -126,6 +126,26 @@ fn tex_and_typst_fractions_have_same_geometry() {
 }
 
 #[test]
+fn title_sits_on_the_top_edge() {
+    use manim_core::constants::{FRAME_Y_RADIUS, UP};
+    use manim_core::SceneGraph;
+    use manim_typst::add_title;
+    let mut g = SceneGraph::new();
+    let id = add_title(&mut g, "Title", &MathOptions::default()).unwrap();
+    let bb = g.bounding_box(id);
+    let top = g.critical_point(id, UP);
+    assert!(
+        (top.y - (FRAME_Y_RADIUS - 0.4)).abs() < 0.15,
+        "title top y={}",
+        top.y
+    );
+    assert!(
+        bb.center().x.abs() < 0.5,
+        "title should stay horizontally centered, bbox={bb:?}"
+    );
+}
+
+#[test]
 fn plain_text_produces_glyph_paths() {
     let parts = text_mobjects("Hello", &MathOptions::default()).unwrap();
     assert!(!parts.is_empty(), "expected glyph fragments");

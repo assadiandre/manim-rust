@@ -576,3 +576,39 @@ pub fn add_text(
     let parts = text_mobjects(source, options)?;
     Ok(add_group(scene, parts, source))
 }
+
+/// Plain text parked on the top edge (Manim `Title`).
+pub fn add_title(
+    scene: &mut manim_core::SceneGraph,
+    source: &str,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let id = add_text(scene, source, options)?;
+    scene.to_edge(id, manim_core::constants::UP, 0.4);
+    Ok(id)
+}
+
+/// Static decimal as Typst text (Manim `DecimalNumber`, not live-updating).
+pub fn add_decimal(
+    scene: &mut manim_core::SceneGraph,
+    value: f64,
+    num_decimal_places: usize,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let src = format!("{value:.prec$}", prec = num_decimal_places);
+    add_text(scene, &src, options)
+}
+
+/// Brace plus a text label on the brace's outer side (Manim `BraceLabel`).
+pub fn add_brace_label(
+    scene: &mut manim_core::SceneGraph,
+    target: manim_core::NodeId,
+    direction: kurbo::Vec2,
+    label: &str,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let brace = manim_core::add_brace(scene, target, direction, 0.15, Style::default());
+    let text = add_text(scene, label, options)?;
+    scene.next_to(text, brace, direction, 0.12);
+    Ok(scene.group_nodes(&[brace, text]))
+}

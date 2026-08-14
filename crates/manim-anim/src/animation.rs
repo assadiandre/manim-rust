@@ -52,6 +52,20 @@ pub enum AnimationKind {
         angle: f64,
         wiggles: f64,
     },
+    /// A sliding window along the path (Manim `ShowPassingFlash`).
+    ShowPassingFlash { full: BezPath, time_width: f64 },
+    /// Center follows a path (Manim `MoveAlongPath`).
+    MoveAlongPath {
+        from: Affine,
+        about: Point,
+        path: BezPath,
+    },
+    /// Scale 0→1 while spinning (Manim `SpinInFromNothing`).
+    SpinIn {
+        from: Affine,
+        about: Point,
+        angle: f64,
+    },
 }
 
 /// The scene property an animation drives. Animations are grouped by
@@ -72,13 +86,16 @@ impl AnimationKind {
             AnimationKind::Create { .. }
             | AnimationKind::Uncreate { .. }
             | AnimationKind::Morph { .. }
-            | AnimationKind::DrawBorderThenFill { .. } => Prop::Path,
+            | AnimationKind::DrawBorderThenFill { .. }
+            | AnimationKind::ShowPassingFlash { .. } => Prop::Path,
             AnimationKind::FadeIn { .. } | AnimationKind::FadeOut { .. } => Prop::Opacity,
             AnimationKind::Shift { .. }
             | AnimationKind::Scale { .. }
             | AnimationKind::Rotate { .. }
             | AnimationKind::Grow { .. }
-            | AnimationKind::Wiggle { .. } => Prop::Transform,
+            | AnimationKind::Wiggle { .. }
+            | AnimationKind::MoveAlongPath { .. }
+            | AnimationKind::SpinIn { .. } => Prop::Transform,
             AnimationKind::Recolor { .. } => Prop::Color,
         }
     }
@@ -185,6 +202,93 @@ impl Animation {
                 full: m.path.clone(),
                 fill: m.style.fill,
                 fill_opacity: m.style.fill_opacity,
+            },
+            0.0,
+            duration,
+        )
+    }
+
+    pub fn show_passing_flash(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        let full = scene.get(target).path.clone();
+        Self::new(
+            target,
+            AnimationKind::ShowPassingFlash {
+                full,
+                time_width: 0.1,
+            },
+            0.0,
+            duration,
+        )
+    }
+
+    pub fn move_along_path(
+        scene: &SceneGraph,
+        target: NodeId,
+        path: NodeId,
+        duration: f64,
+    ) -> Self {
+        let from = scene.get(target).transform;
+        let about = scene.local_pivot(target);
+        let world = scene.world_transform(path);
+        let baked = world * scene.get(path).path.clone();
+        Self::new(
+            target,
+            AnimationKind::MoveAlongPath {
+                from,
+                about,
+                path: baked,
+            },
+            0.0,
+            duration,
+        )
+    }
+
+    pub fn grow_from_point(
+        scene: &SceneGraph,
+        target: NodeId,
+        world_point: Point,
+        duration: f64,
+    ) -> Self {
+        let from = scene.get(target).transform;
+        let about = scene.world_transform(target).inverse() * world_point;
+        Self::new(target, AnimationKind::Grow { from, about }, 0.0, duration)
+    }
+
+    pub fn grow_from_edge(scene: &SceneGraph, target: NodeId, edge: Vec2, duration: f64) -> Self {
+        let bb = scene.local_family_bbox(target);
+        let about = Point::new(
+            if edge.x > 0.0 {
+                bb.x1
+            } else if edge.x < 0.0 {
+                bb.x0
+            } else {
+                bb.center().x
+            },
+            if edge.y > 0.0 {
+                bb.y1
+            } else if edge.y < 0.0 {
+                bb.y0
+            } else {
+                bb.center().y
+            },
+        );
+        let from = scene.get(target).transform;
+        Self::new(target, AnimationKind::Grow { from, about }, 0.0, duration)
+    }
+
+    pub fn shrink_to_center(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        Self::scale(scene, target, 0.0, duration)
+    }
+
+    pub fn spin_in(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        let from = scene.get(target).transform;
+        let about = scene.local_pivot(target);
+        Self::new(
+            target,
+            AnimationKind::SpinIn {
+                from,
+                about,
+                angle: std::f64::consts::PI,
             },
             0.0,
             duration,
@@ -302,6 +406,25 @@ impl Animation {
                 let w = (wiggles * std::f64::consts::PI * alpha).sin() * (1.0 - alpha);
                 scene.get_mut(self.target).transform =
                     *from * Affine::rotate_about(angle * w, *about);
+            }
+            AnimationKind::ShowPassingFlash { full, time_width } => {
+                let tw = time_width.max(1e-6);
+                let upper = (alpha * (1.0 + tw)).min(1.0);
+                let lower = (alpha * (1.0 + tw) - tw).clamp(0.0, 1.0);
+                scene.get_mut(self.target).path = geometry::trim(full, lower, upper);
+            }
+            AnimationKind::MoveAlongPath { from, about, path } => {
+                let target_pt = geometry::point_along(path, alpha);
+                let current = *from * *about;
+                scene.get_mut(self.target).transform =
+                    Affine::translate(target_pt - current) * *from;
+            }
+            AnimationKind::SpinIn { from, about, angle } => {
+                let rot = Affine::rotate_about(angle * (1.0 - alpha), *about);
+                let scale = Affine::translate(about.to_vec2())
+                    * Affine::scale(alpha)
+                    * Affine::translate(-about.to_vec2());
+                scene.get_mut(self.target).transform = *from * rot * scale;
             }
         }
     }

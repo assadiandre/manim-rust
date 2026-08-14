@@ -240,6 +240,48 @@ impl Scene {
         self.play_camera(to, duration);
     }
 
+    pub fn play_show_passing_flash(&mut self, target: NodeId, duration: f64) {
+        let anims: Vec<_> = path_targets(&self.graph, target)
+            .into_iter()
+            .map(|id| Animation::show_passing_flash(&self.graph, id, duration))
+            .collect();
+        self.play(anims);
+    }
+
+    /// Radiating lines that flash past a point (Manim `Flash`).
+    pub fn play_flash(&mut self, at: kurbo::Point, duration: f64, color: Color) {
+        let n = 12;
+        let radius = 0.4;
+        let len = 0.22;
+        let group = self.graph.add(Mobject::group().named("flash"));
+        let style = Style::default().no_fill().with_stroke(color, 4.0);
+        let mut anims = Vec::with_capacity(n);
+        for i in 0..n {
+            let a = i as f64 / n as f64 * std::f64::consts::TAU;
+            let dir = kurbo::Vec2::new(a.cos(), a.sin());
+            let start = at + dir * (radius - len);
+            let end = at + dir * radius;
+            let id = self.graph.add_child(
+                group,
+                Mobject::new(manim_core::geometry::line(start, end)).with_style(style.clone()),
+            );
+            anims.push(Animation::show_passing_flash(&self.graph, id, duration));
+        }
+        self.play(anims);
+    }
+
+    pub fn play_move_along_path(&mut self, target: NodeId, path: NodeId, duration: f64) {
+        self.play([Animation::move_along_path(&self.graph, target, path, duration)]);
+    }
+
+    pub fn play_spin_in(&mut self, target: NodeId, duration: f64) {
+        self.play([Animation::spin_in(&self.graph, target, duration)]);
+    }
+
+    pub fn play_shrink(&mut self, target: NodeId, duration: f64) {
+        self.play([Animation::shrink_to_center(&self.graph, target, duration)]);
+    }
+
     pub fn duration(&self) -> f64 {
         self.now
     }
@@ -487,5 +529,51 @@ mod tests {
         assert!(sim.get(c).style.fill.is_none());
         scene.timeline.apply(&mut sim, 1.0);
         assert!(sim.get(c).style.fill.is_some());
+    }
+
+    #[test]
+    fn move_along_path_ends_at_path_end() {
+        let mut scene = Scene::new();
+        let path = scene.add(Mobject::new(geometry::line(
+            Point::new(-2.0, 0.0),
+            Point::new(2.0, 0.0),
+        )));
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 0.3)));
+        scene.play_move_along_path(c, path, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let start = sim.center_of(c);
+        assert!((start.x + 2.0).abs() < 0.05, "x={}", start.x);
+        scene.timeline.apply(&mut sim, 1.0);
+        let end = sim.center_of(c);
+        assert!((end.x - 2.0).abs() < 0.05, "x={}", end.x);
+    }
+
+    #[test]
+    fn passing_flash_empty_at_ends() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        scene.play_show_passing_flash(c, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        assert!(geometry::path_length(&sim.get(c).path) < 1e-6);
+        scene.timeline.apply(&mut sim, 0.5);
+        assert!(geometry::path_length(&sim.get(c).path) > 0.1);
+        scene.timeline.apply(&mut sim, 1.0);
+        assert!(geometry::path_length(&sim.get(c).path) < 1e-6);
+    }
+
+    #[test]
+    fn spin_in_starts_collapsed() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        scene.play_spin_in(c, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let p = sim.get(c).transform * Point::new(1.0, 0.0);
+        assert!(p.x.abs() < 1e-6 && p.y.abs() < 1e-6);
+        scene.timeline.apply(&mut sim, 1.0);
+        let p = sim.get(c).transform * Point::new(1.0, 0.0);
+        assert!((p.x - 1.0).abs() < 1e-6);
     }
 }
