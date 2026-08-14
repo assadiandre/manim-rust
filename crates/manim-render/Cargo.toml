@@ -1,0 +1,15 @@
+[package]
+name = "manim-render"
+version = "0.1.0"
+edition = "2021"
+description = "Headless wgpu + vello renderer: PNG output and mp4 via ffmpeg pipe"
+
+[dependencies]
+image = "0.25.10"
+manim-anim = { version = "0.1.0", path = "../manim-anim" }
+manim-core = { path = "../manim-core" }
+pollster = "1.0.1"
+vello = "0.9.0"
+
+[dev-dependencies]
+manim-scenes = { path = "../manim-scenes" }

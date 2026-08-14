@@ -1,0 +1,5 @@
+# This file is used internally by FFMPEG.
+file 'file:/Users/andreassadi/Desktop/manim_rust/scripts/media/videos/manimce_reference/1080p60/partial_movie_files/RustDemoReference/2257293077_1083525659_223132457.mp4'
+file 'file:/Users/andreassadi/Desktop/manim_rust/scripts/media/videos/manimce_reference/1080p60/partial_movie_files/RustDemoReference/2135761390_2605033214_966733920.mp4'
+file 'file:/Users/andreassadi/Desktop/manim_rust/scripts/media/videos/manimce_reference/1080p60/partial_movie_files/RustDemoReference/2135761390_608486097_1426948214.mp4'
+file 'file:/Users/andreassadi/Desktop/manim_rust/scripts/media/videos/manimce_reference/1080p60/partial_movie_files/RustDemoReference/2135761390_3394500337_3488480165.mp4'

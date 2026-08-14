@@ -1,0 +1,14 @@
+/target
+**/*.rs.bk
+*.mp4
+/media
+__pycache__
+*.pyc
+*.so
+.dist/
+dist/
+.DS_Store
+.venv
+.venv-ref
+.venv-*
+.python-version

@@ -1,0 +1,8 @@
+[package]
+name = "manim-anim"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kurbo = "0.13.1"
+manim-core = { path = "../manim-core" }

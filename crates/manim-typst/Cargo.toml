@@ -1,0 +1,12 @@
+[package]
+name = "manim-typst"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+manim-core = { path = "../manim-core" }
+mitex = "0.2"
+ttf-parser = "0.25.1"
+typst = "0.15.1"
+typst-assets = { version = "0.15.1", features = ["fonts"] }
+typst-layout = "0.15.1"

@@ -1,0 +1,11 @@
+[package]
+name = "manim-scenes"
+version = "0.1.0"
+edition = "2021"
+description = "Shared demo/probe scenes for the CLI, golden tests, and visual checks"
+
+[dependencies]
+manim-core = { path = "../manim-core" }
+manim-anim = { path = "../manim-anim" }
+manim-typst = { path = "../manim-typst" }
+kurbo = "0.13.1"

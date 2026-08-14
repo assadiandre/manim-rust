@@ -1,0 +1,11 @@
+[package]
+name = "manim-core"
+version = "0.1.0"
+edition = "2021"
+description = "Geometry kernel, styles, and dirty-tracked scene graph for manim_rust"
+
+[dependencies]
+# Pinned to the exact versions vello 0.9 uses, so path/color types are
+# identical across the workspace (see manim-render).
+kurbo = "0.13.1"
+peniko = "0.6.1"
