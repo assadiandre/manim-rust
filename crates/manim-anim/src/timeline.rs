@@ -97,8 +97,65 @@ impl Scene {
         self.timeline.duration = self.now;
     }
 
+    /// Manim `LaggedStart`: each animation begins `lag_ratio * prev.duration`
+    /// after the previous one. The play span is the last animation's end.
+    pub fn play_lagged(&mut self, animations: impl IntoIterator<Item = Animation>, lag_ratio: f64) {
+        let mut cursor = self.now;
+        let mut end = self.now;
+        for mut a in animations {
+            a.start += cursor;
+            end = end.max(a.end());
+            a.apply_final(&mut self.graph);
+            cursor += a.duration * lag_ratio;
+            self.timeline.animations.push(a);
+        }
+        self.now = end;
+        self.timeline.duration = self.now;
+    }
+
+    /// Create every path-bearing leaf under `target` (Manim `Create` on a VGroup).
+    pub fn play_create(&mut self, target: NodeId, duration: f64) {
+        let anims: Vec<_> = path_targets(&self.graph, target)
+            .into_iter()
+            .map(|id| Animation::create(&self.graph, id, duration))
+            .collect();
+        self.play(anims);
+    }
+
+    /// Lagged Create of path leaves so a formula writes on glyph-by-glyph.
+    pub fn play_write(&mut self, target: NodeId, duration: f64) {
+        let targets = path_targets(&self.graph, target);
+        let n = targets.len();
+        let lag = 0.1;
+        let each = duration / (1.0 + (n.saturating_sub(1) as f64) * lag);
+        let anims: Vec<_> = targets
+            .iter()
+            .map(|&id| Animation::create(&self.graph, id, each))
+            .collect();
+        self.play_lagged(anims, lag);
+    }
+
+    pub fn play_uncreate(&mut self, target: NodeId, duration: f64) {
+        let anims: Vec<_> = path_targets(&self.graph, target)
+            .into_iter()
+            .map(|id| Animation::uncreate(&self.graph, id, duration))
+            .collect();
+        self.play(anims);
+    }
+
     pub fn duration(&self) -> f64 {
         self.now
+    }
+}
+
+/// Leaves to animate for Create/Write/Uncreate. Falls back to `target` itself
+/// when the node has no path-bearing descendants (empty group, or a leaf).
+pub fn path_targets(graph: &SceneGraph, target: NodeId) -> Vec<NodeId> {
+    let leaves = graph.path_leaves(target);
+    if leaves.is_empty() {
+        vec![target]
+    } else {
+        leaves
     }
 }
 
@@ -194,5 +251,88 @@ mod tests {
         scene.timeline.apply(&mut sim, 1.5);
         let p = sim.get(c).transform * Point::ORIGIN;
         assert!((p.x - 1.5).abs() < 1e-9, "x={}", p.x);
+    }
+
+    #[test]
+    fn uncreate_shrinks_the_path() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        let full = geometry::path_length(&scene.graph.get(c).path);
+        scene.play([Animation::uncreate(&scene.graph, c, 1.0).with_easing(Easing::Linear)]);
+
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        assert!((geometry::path_length(&sim.get(c).path) - full).abs() / full < 0.05);
+
+        scene.timeline.apply(&mut sim, 0.5);
+        let mid = geometry::path_length(&sim.get(c).path);
+        assert!((mid - full * 0.5).abs() / full < 0.05, "mid={mid}");
+
+        scene.timeline.apply(&mut sim, 1.0);
+        assert!(geometry::path_length(&sim.get(c).path) < 1e-6);
+    }
+
+    #[test]
+    fn rotate_quarter_turn() {
+        let mut scene = Scene::new();
+        let s = scene.add(Mobject::new(geometry::square(Point::ORIGIN, 2.0)));
+        scene.play([
+            Animation::rotate(&scene.graph, s, std::f64::consts::FRAC_PI_2, 1.0)
+                .with_easing(Easing::Linear),
+        ]);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 1.0);
+        // Local (1, 0) on the square's right side rotates to (0, 1).
+        let p = sim.get(s).transform * Point::new(1.0, 0.0);
+        assert!(p.x.abs() < 1e-9 && (p.y - 1.0).abs() < 1e-9, "{p:?}");
+    }
+
+    #[test]
+    fn grow_starts_collapsed() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        scene.play([
+            Animation::grow_from_center(&scene.graph, c, 1.0).with_easing(Easing::Linear),
+        ]);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let p = sim.get(c).transform * Point::new(1.0, 0.0);
+        assert!(p.x.abs() < 1e-9 && p.y.abs() < 1e-9);
+        scene.timeline.apply(&mut sim, 1.0);
+        let p = sim.get(c).transform * Point::new(1.0, 0.0);
+        assert!((p.x - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn indicate_returns_to_original_scale() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        scene.play([Animation::indicate(&scene.graph, c, 1.0)]);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.5);
+        let mid = sim.get(c).transform * Point::new(1.0, 0.0);
+        assert!(mid.x > 1.05, "should be enlarged at midpoint, x={}", mid.x);
+        scene.timeline.apply(&mut sim, 1.0);
+        let end = sim.get(c).transform * Point::new(1.0, 0.0);
+        assert!((end.x - 1.0).abs() < 1e-6, "x={}", end.x);
+    }
+
+    #[test]
+    fn play_lagged_staggers_starts() {
+        let mut scene = Scene::new();
+        let a = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.5)));
+        let b = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.5)));
+        scene.play_lagged(
+            [
+                Animation::fade_in(&scene.graph, a, 1.0).with_easing(Easing::Linear),
+                Animation::fade_in(&scene.graph, b, 1.0).with_easing(Easing::Linear),
+            ],
+            0.5,
+        );
+        assert!((scene.duration() - 1.5).abs() < 1e-9);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.25);
+        assert!((sim.get(a).style.opacity - 0.25).abs() < 1e-6);
+        assert_eq!(sim.get(b).style.opacity, 0.0);
     }
 }

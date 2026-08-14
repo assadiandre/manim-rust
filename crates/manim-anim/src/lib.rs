@@ -10,7 +10,7 @@ pub mod timeline;
 
 pub use animation::{Animation, AnimationKind, Prop};
 pub use easing::Easing;
-pub use timeline::{Scene, Timeline};
+pub use timeline::{path_targets, Scene, Timeline};
 
 pub use kurbo;
 pub use manim_core;

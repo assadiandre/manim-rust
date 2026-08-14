@@ -17,12 +17,17 @@ pub const MORPH_SAMPLES: usize = 512;
 pub enum AnimationKind {
     /// Stroke reveal along the path (Manim's `Create`/`ShowCreation`).
     Create { full: BezPath },
+    /// Reverse of Create (Manim `Uncreate`).
+    Uncreate { full: BezPath },
     /// Opacity 0 -> snapshot.
     FadeIn { to_opacity: f32 },
     /// Opacity snapshot -> 0.
     FadeOut { from_opacity: f32 },
     Shift { from: Affine, delta: Vec2 },
     Scale { from: Affine, about: Point, factor: f64 },
+    Rotate { from: Affine, about: Point, angle: f64 },
+    /// Scale 0 → 1 about a pivot (Manim `GrowFromCenter`).
+    Grow { from: Affine, about: Point },
     /// Path morph via common resampling.
     Morph { from: BezPath, to: BezPath },
 }
@@ -41,9 +46,14 @@ pub enum Prop {
 impl AnimationKind {
     pub fn prop(&self) -> Prop {
         match self {
-            AnimationKind::Create { .. } | AnimationKind::Morph { .. } => Prop::Path,
+            AnimationKind::Create { .. }
+            | AnimationKind::Uncreate { .. }
+            | AnimationKind::Morph { .. } => Prop::Path,
             AnimationKind::FadeIn { .. } | AnimationKind::FadeOut { .. } => Prop::Opacity,
-            AnimationKind::Shift { .. } | AnimationKind::Scale { .. } => Prop::Transform,
+            AnimationKind::Shift { .. }
+            | AnimationKind::Scale { .. }
+            | AnimationKind::Rotate { .. }
+            | AnimationKind::Grow { .. } => Prop::Transform,
         }
     }
 }
@@ -94,10 +104,31 @@ impl Animation {
     }
 
     pub fn scale(scene: &SceneGraph, target: NodeId, factor: f64, duration: f64) -> Self {
-        let m = scene.get(target);
-        let from = m.transform;
-        let about = geometry::center(&m.path);
+        let from = scene.get(target).transform;
+        let about = scene.local_pivot(target);
         Self::new(target, AnimationKind::Scale { from, about, factor }, 0.0, duration)
+    }
+
+    pub fn uncreate(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        let full = scene.get(target).path.clone();
+        Self::new(target, AnimationKind::Uncreate { full }, 0.0, duration)
+    }
+
+    pub fn rotate(scene: &SceneGraph, target: NodeId, angle: f64, duration: f64) -> Self {
+        let from = scene.get(target).transform;
+        let about = scene.local_pivot(target);
+        Self::new(target, AnimationKind::Rotate { from, about, angle }, 0.0, duration)
+    }
+
+    pub fn grow_from_center(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        let from = scene.get(target).transform;
+        let about = scene.local_pivot(target);
+        Self::new(target, AnimationKind::Grow { from, about }, 0.0, duration)
+    }
+
+    /// Pulse scale (Manim `Indicate`): grows then returns via `ThereAndBack`.
+    pub fn indicate(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        Self::scale(scene, target, 1.2, duration).with_easing(Easing::ThereAndBack)
     }
 
     pub fn morph(scene: &SceneGraph, target: NodeId, to: BezPath, duration: f64) -> Self {
@@ -119,6 +150,9 @@ impl Animation {
         match &self.kind {
             AnimationKind::Create { full } => {
                 scene.get_mut(self.target).path = geometry::trim(full, 0.0, alpha);
+            }
+            AnimationKind::Uncreate { full } => {
+                scene.get_mut(self.target).path = geometry::trim(full, 0.0, 1.0 - alpha);
             }
             AnimationKind::FadeIn { to_opacity } => {
                 scene.get_mut(self.target).style.opacity = to_opacity * alpha as f32;
@@ -142,6 +176,16 @@ impl Animation {
                     * Affine::translate(-about.to_vec2());
                 scene.get_mut(self.target).transform = *from * scale_about;
             }
+            AnimationKind::Rotate { from, about, angle } => {
+                scene.get_mut(self.target).transform =
+                    *from * Affine::rotate_about(angle * alpha, *about);
+            }
+            AnimationKind::Grow { from, about } => {
+                let scale_about = Affine::translate(about.to_vec2())
+                    * Affine::scale(alpha)
+                    * Affine::translate(-about.to_vec2());
+                scene.get_mut(self.target).transform = *from * scale_about;
+            }
             AnimationKind::Morph { from, to } => {
                 scene.get_mut(self.target).path =
                     geometry::lerp_paths(from, to, MORPH_SAMPLES, alpha);
@@ -151,8 +195,10 @@ impl Animation {
 
     /// End state — applied eagerly at `play()` time so subsequently built
     /// animations snapshot correct `from` states (Manim semantics).
+    /// Uses the eased alpha at t=1 so ThereAndBack (Indicate) restores the
+    /// pre-animation transform.
     pub fn apply_final(&self, scene: &mut SceneGraph) {
-        self.apply(scene, 1.0);
+        self.apply(scene, self.easing.eval(1.0));
     }
 
     pub(crate) fn apply_at_alpha(&self, scene: &mut SceneGraph, alpha: f64) {

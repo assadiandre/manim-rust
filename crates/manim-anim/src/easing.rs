@@ -9,6 +9,8 @@ pub enum Easing {
     EaseInCubic,
     EaseOutCubic,
     EaseInOutCubic,
+    /// Manim `there_and_back`: 0 → 1 → 0, smoothed. Used by Indicate.
+    ThereAndBack,
 }
 
 impl Easing {
@@ -25,6 +27,10 @@ impl Easing {
                 } else {
                     1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
                 }
+            }
+            Easing::ThereAndBack => {
+                let s = if t < 0.5 { 2.0 * t } else { 2.0 * (1.0 - t) };
+                s * s * (3.0 - 2.0 * s)
             }
         }
     }
@@ -46,5 +52,8 @@ mod tests {
             assert!((e.eval(0.0)).abs() < 1e-12);
             assert!((e.eval(1.0) - 1.0).abs() < 1e-12);
         }
+        assert!((Easing::ThereAndBack.eval(0.0)).abs() < 1e-12);
+        assert!((Easing::ThereAndBack.eval(0.5) - 1.0).abs() < 1e-12);
+        assert!((Easing::ThereAndBack.eval(1.0)).abs() < 1e-12);
     }
 }
