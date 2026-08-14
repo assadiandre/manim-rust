@@ -84,4 +84,9 @@ crates/
 - M9 authoring surface (ManimCE-inspired): directions, bbox layout
   (`move_to`/`next_to`/`arrange`), richer geometry (arc/arrow/ellipse),
   Rotate/Uncreate/Write/Grow/Indicate, NumberLine/Axes + baked plots
+- M10 everyday 2D CE: Typst `Text`, annotations (surrounding rect /
+  underline / brace / cross), NumberPlane, z-index, Recolor /
+  DrawBorderThenFill / Wiggle / Circumscribe, camera shift+zoom as
+  timeline data (not a node), `to_corner` / `set_x`/`set_y` / `flip` /
+  `stretch` / `arrange_in_grid` / `set_width`/`set_height`
 - M8 (later) 3D spike: cube pass composited under 2D overlay

@@ -4,11 +4,12 @@
 
 use kurbo::{Affine, Point, Vec2};
 use manim_anim::{Animation, Scene};
-use manim_core::constants::{LEFT, RIGHT};
+use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
-    add_arrow, add_axes, geometry, palette, AxesOpts, Mobject, Style,
+    add_arrow, add_axes, add_brace, add_number_plane, add_surrounding_rect, add_underline,
+    geometry, palette, AxesOpts, Mobject, NumberPlaneOpts, Style,
 };
-use manim_typst::{add_math, MathOptions};
+use manim_typst::{add_math, add_text, MathOptions};
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
 /// formula (typeset in-process by typst) fades in above it.
@@ -247,6 +248,101 @@ pub fn probes() -> Vec<Probe> {
             .with_style(Style::default().with_stroke(palette::yellow(), 5.0).no_fill()),
     );
     out.push(probe("axes", s, &[0.0]));
+
+    // plain text (Typst markup, not math).
+    let mut s = Scene::new();
+    add_text(&mut s.graph, "Hello, Manim", &MathOptions::default())
+        .expect("text compile failed");
+    out.push(probe("text", s, &[0.0]));
+
+    // annotations: surrounding rect, underline, brace.
+    let mut s = Scene::new();
+    let sq = s.add(
+        Mobject::new(geometry::square(Point::ORIGIN, 1.6))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    add_surrounding_rect(
+        &mut s.graph,
+        sq,
+        0.2,
+        0.15,
+        Style::default().no_fill().with_stroke(palette::yellow(), 4.0),
+    );
+    add_underline(
+        &mut s.graph,
+        sq,
+        0.15,
+        Style::default().with_stroke(palette::gold(), 5.0),
+    );
+    add_brace(
+        &mut s.graph,
+        sq,
+        DOWN,
+        0.15,
+        Style::default().with_stroke(palette::white(), 4.0),
+    );
+    out.push(probe("annotate", s, &[0.0]));
+
+    // number plane
+    let mut s = Scene::new();
+    add_number_plane(
+        &mut s.graph,
+        &NumberPlaneOpts {
+            x_min: -5.0,
+            x_max: 5.0,
+            y_min: -3.0,
+            y_max: 3.0,
+            faded_line_ratio: 2,
+            ..NumberPlaneOpts::default()
+        },
+        Style::default()
+            .with_stroke(palette::blue_d(), 2.0)
+            .with_opacity(0.7),
+        Style::default().with_stroke(palette::white(), 3.0),
+    );
+    out.push(probe("plane", s, &[0.0]));
+
+    // circumscribe
+    let mut s = Scene::new();
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.2))
+            .with_style(Style::filled(palette::green()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play_circumscribe(c, 1.2, palette::yellow());
+    out.push(probe("circumscribe", s, &[0.0, 0.3, 0.6, 0.9, 1.2]));
+
+    // draw border then fill
+    let mut s = Scene::new();
+    let sq = s.add(
+        Mobject::new(geometry::square(Point::ORIGIN, 2.0))
+            .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play_draw_border_then_fill(sq, 1.2);
+    out.push(probe("dbtf", s, &[0.0, 0.4, 0.7, 1.2]));
+
+    // wiggle
+    let mut s = Scene::new();
+    let t = s.add(
+        Mobject::new(geometry::triangle(Point::ORIGIN, 1.4))
+            .with_style(Style::filled(palette::orange()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play([Animation::wiggle(&s.graph, t, 1.0)]);
+    out.push(probe("wiggle", s, &[0.0, 0.25, 0.5, 0.75, 1.0]));
+
+    // camera zoom toward a circle on the right
+    let mut s = Scene::new();
+    s.add(
+        Mobject::new(geometry::circle(Point::new(-3.0, 0.0), 0.8))
+            .with_style(Style::filled(palette::gray()).with_stroke(palette::white(), 3.0)),
+    );
+    let focus = s.add(
+        Mobject::new(geometry::circle(Point::new(2.5, 0.0), 0.8))
+            .with_style(Style::filled(palette::teal()).with_stroke(palette::white(), 3.0)),
+    );
+    s.play_camera_shift(Vec2::new(2.5, 0.0), 0.8);
+    s.play_camera_zoom(2.0, 0.8);
+    let _ = focus;
+    out.push(probe("camera", s, &[0.0, 0.8, 1.6]));
 
     out
 }

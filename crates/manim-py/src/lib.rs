@@ -15,11 +15,15 @@ use manim_core::constants::{
 use manim_core::kurbo::{Point, Vec2};
 use manim_core::peniko::Color;
 use manim_core::{
-    add_arrow as rust_add_arrow, add_axes as rust_add_axes, add_number_line as rust_add_number_line,
-    geometry, palette, AxesOpts, Mobject, NodeId, NumberLineOpts, Style,
+    add_arrow as rust_add_arrow, add_axes as rust_add_axes, add_brace as rust_add_brace,
+    add_cross as rust_add_cross, add_double_arrow as rust_add_double_arrow,
+    add_number_line as rust_add_number_line, add_number_plane as rust_add_number_plane,
+    add_surrounding_rect as rust_add_surrounding_rect, add_underline as rust_add_underline,
+    add_vector as rust_add_vector, geometry, palette, AxesOpts, Mobject, NodeId, NumberLineOpts,
+    NumberPlaneOpts, Style,
 };
 use manim_render::{render_video, Renderer};
-use manim_typst::{add_math, add_tex as add_latex, MathOptions};
+use manim_typst::{add_math, add_tex as add_latex, add_text as rust_add_text, MathOptions};
 
 fn parse_color(s: &str) -> PyResult<Color> {
     let named = |name: &str| match name {
@@ -36,6 +40,7 @@ fn parse_color(s: &str) -> PyResult<Color> {
         "pink" => Some(palette::pink()),
         "gold" => Some(palette::gold()),
         "maroon" => Some(palette::maroon()),
+        "blue_d" => Some(palette::blue_d()),
         _ => None,
     };
     if let Some(c) = named(&s.to_lowercase()) {
@@ -572,6 +577,246 @@ impl PyScene {
         Ok(())
     }
 
+    #[pyo3(signature = (source, x = 0.0, y = 0.0, color = None, font_size_pt = 48.0))]
+    fn add_text(
+        &mut self,
+        source: &str,
+        x: f64,
+        y: f64,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        let id = rust_add_text(&mut self.scene.graph, source, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        self.scene.graph.get_mut(id).transform =
+            manim_core::kurbo::Affine::translate((x, y));
+        Ok(id)
+    }
+
+    #[pyo3(signature = (x = 0.0, y = 0.0, stroke = Some("white".to_string()), stroke_width = 6.0))]
+    fn add_vector(
+        &mut self,
+        x: f64,
+        y: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_vector(
+            &mut self.scene.graph,
+            Point::new(x, y),
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (x1, y1, x2, y2, buff = 0.25, stroke = Some("white".to_string()), stroke_width = 6.0))]
+    fn add_double_arrow(
+        &mut self,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        buff: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_double_arrow(
+            &mut self.scene.graph,
+            Point::new(x1, y1),
+            Point::new(x2, y2),
+            buff,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (target, buff = 0.15, corner_radius = 0.0, stroke = Some("yellow".to_string()), stroke_width = 4.0))]
+    fn add_surrounding_rect(
+        &mut self,
+        target: NodeId,
+        buff: f64,
+        corner_radius: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_surrounding_rect(
+            &mut self.scene.graph,
+            target,
+            buff,
+            corner_radius,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (target, buff = 0.1, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_underline(
+        &mut self,
+        target: NodeId,
+        buff: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_underline(
+            &mut self.scene.graph,
+            target,
+            buff,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (target, direction = "down", buff = 0.2, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_brace(
+        &mut self,
+        target: NodeId,
+        direction: &str,
+        buff: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_brace(
+            &mut self.scene.graph,
+            target,
+            parse_direction(direction)?,
+            buff,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (target, stroke = Some("red".to_string()), stroke_width = 6.0))]
+    fn add_cross(&mut self, target: NodeId, stroke: Option<String>, stroke_width: f64) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_cross(&mut self.scene.graph, target, style))
+    }
+
+    #[pyo3(signature = (x_min = -7.0, x_max = 7.0, y_min = -4.0, y_max = 4.0, faded_line_ratio = 1, grid = Some("blue_d".to_string()), axis = Some("white".to_string())))]
+    fn add_number_plane(
+        &mut self,
+        x_min: f64,
+        x_max: f64,
+        y_min: f64,
+        y_max: f64,
+        faded_line_ratio: u32,
+        grid: Option<String>,
+        axis: Option<String>,
+    ) -> PyResult<usize> {
+        let grid_style = build_style(None, grid.as_deref(), 2.0)?;
+        let axis_style = build_style(None, axis.as_deref(), 3.0)?;
+        Ok(rust_add_number_plane(
+            &mut self.scene.graph,
+            &NumberPlaneOpts {
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+                faded_line_ratio,
+                ..NumberPlaneOpts::default()
+            },
+            grid_style,
+            axis_style,
+        ))
+    }
+
+    #[pyo3(signature = (target, direction = "ul", buff = 0.5))]
+    fn to_corner(&mut self, target: NodeId, direction: &str, buff: f64) -> PyResult<()> {
+        self.scene
+            .graph
+            .to_corner(target, parse_direction(direction)?, buff);
+        Ok(())
+    }
+
+    fn set_x(&mut self, target: NodeId, x: f64) {
+        self.scene.graph.set_x(target, x);
+    }
+
+    fn set_y(&mut self, target: NodeId, y: f64) {
+        self.scene.graph.set_y(target, y);
+    }
+
+    fn flip(&mut self, target: NodeId, axis: &str) -> PyResult<()> {
+        self.scene.graph.flip(target, parse_direction(axis)?);
+        Ok(())
+    }
+
+    #[pyo3(signature = (group, rows = None, cols = None, buff_x = 0.25, buff_y = 0.25, center = true))]
+    fn arrange_in_grid(
+        &mut self,
+        group: NodeId,
+        rows: Option<usize>,
+        cols: Option<usize>,
+        buff_x: f64,
+        buff_y: f64,
+        center: bool,
+    ) {
+        self.scene
+            .graph
+            .arrange_in_grid(group, rows, cols, buff_x, buff_y, center);
+    }
+
+    fn set_z_index(&mut self, target: NodeId, z: i32) {
+        self.scene.graph.set_z_index(target, z);
+    }
+
+    fn set_width(&mut self, target: NodeId, width: f64) {
+        self.scene.graph.set_width(target, width);
+    }
+
+    fn set_height(&mut self, target: NodeId, height: f64) {
+        self.scene.graph.set_height(target, height);
+    }
+
+    fn rotate(&mut self, target: NodeId, angle: f64) {
+        self.scene.graph.rotate_about_center(target, angle);
+    }
+
+    #[pyo3(signature = (target, color, duration = 1.0, easing = "smooth"))]
+    fn play_recolor(
+        &mut self,
+        target: NodeId,
+        color: &str,
+        duration: f64,
+        easing: &str,
+    ) -> PyResult<()> {
+        let a = Animation::recolor(&self.scene.graph, target, parse_color(color)?, duration)
+            .with_easing(parse_easing(easing)?);
+        self.scene.play([a]);
+        Ok(())
+    }
+
+    #[pyo3(signature = (target, duration = 1.0))]
+    fn play_wiggle(&mut self, target: NodeId, duration: f64) {
+        self.scene
+            .play([Animation::wiggle(&self.scene.graph, target, duration)]);
+    }
+
+    #[pyo3(signature = (target, duration = 1.0))]
+    fn play_draw_border_then_fill(&mut self, target: NodeId, duration: f64) {
+        self.scene.play_draw_border_then_fill(target, duration);
+    }
+
+    #[pyo3(signature = (target, duration = 1.2, color = "yellow"))]
+    fn play_circumscribe(&mut self, target: NodeId, duration: f64, color: &str) -> PyResult<()> {
+        self.scene
+            .play_circumscribe(target, duration, parse_color(color)?);
+        Ok(())
+    }
+
+    #[pyo3(signature = (dx, dy, duration = 1.0))]
+    fn play_camera_shift(&mut self, dx: f64, dy: f64, duration: f64) {
+        self.scene.play_camera_shift(Vec2::new(dx, dy), duration);
+    }
+
+    #[pyo3(signature = (factor, duration = 1.0))]
+    fn play_camera_zoom(&mut self, factor: f64, duration: f64) {
+        self.scene.play_camera_zoom(factor, duration);
+    }
+
     fn wait(&mut self, duration: f64) {
         self.scene.wait(duration);
     }
@@ -602,6 +847,7 @@ impl PyScene {
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let mut sim = self.scene.graph.clone();
         self.scene.timeline.apply(&mut sim, time);
+        renderer.camera = self.scene.timeline.camera_at(time);
         renderer
             .save_png(&mut sim, std::path::Path::new(path))
             .map_err(|e| PyValueError::new_err(e.to_string()))

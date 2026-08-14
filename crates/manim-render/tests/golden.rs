@@ -111,6 +111,21 @@ fn golden_layout_and_axes() {
 }
 
 #[test]
+fn golden_text_annotate_plane() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    for name in ["text", "annotate", "plane"] {
+        let scene = manim_scenes::probes()
+            .into_iter()
+            .find(|p| p.name == name)
+            .unwrap_or_else(|| panic!("{name} probe"));
+        let mut sim = scene.scene.graph.clone();
+        scene.scene.timeline.apply(&mut sim, 0.0);
+        let px = r.render_frame(&mut sim).unwrap().to_vec();
+        assert_golden(&px, 480, 270, &format!("{name}.png"));
+    }
+}
+
+#[test]
 fn frame_reuse_meets_budget() {
     let mut scene = SceneGraph::new();
     for i in 0..1000 {
@@ -169,6 +184,7 @@ fn video_smoke_test() {
     let timeline = Timeline {
         animations: vec![Animation::create(&scene, c, 1.0)],
         duration: 1.0,
+        ..Timeline::default()
     };
 
     let mut r = Renderer::new(160, 90, black()).unwrap();
