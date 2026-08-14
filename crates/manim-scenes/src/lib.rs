@@ -6,10 +6,11 @@ use kurbo::{Affine, Point, Vec2};
 use manim_anim::{Animation, Scene};
 use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
-    add_arrow, add_axes, add_brace, add_number_plane, add_surrounding_rect, add_underline,
-    geometry, palette, AxesOpts, Mobject, NumberPlaneOpts, Style,
+    add_angle, add_arrow, add_axes, add_brace, add_curved_arrow, add_number_plane,
+    add_polar_plane, add_right_angle, add_surrounding_rect, add_underline, geometry, palette,
+    AxesOpts, Mobject, NumberPlaneOpts, PolarPlaneOpts, Style,
 };
-use manim_typst::{add_math, add_text, MathOptions};
+use manim_typst::{add_decimal, add_math, add_text, add_title, MathOptions};
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
 /// formula (typeset in-process by typst) fades in above it.
@@ -343,6 +344,154 @@ pub fn probes() -> Vec<Probe> {
     s.play_camera_zoom(2.0, 0.8);
     let _ = focus;
     out.push(probe("camera", s, &[0.0, 0.8, 1.6]));
+
+    // star / polygon / annular sector / curved arrow
+    let mut s = Scene::new();
+    s.add(
+        Mobject::new(geometry::star(
+            Point::new(-3.5, 0.8),
+            5,
+            1.1,
+            None,
+            std::f64::consts::FRAC_PI_2,
+        ))
+        .with_style(Style::filled(palette::gold()).with_stroke(palette::white(), 3.0)),
+    );
+    s.add(
+        Mobject::new(geometry::regular_polygon(
+            Point::new(-0.8, 0.8),
+            6,
+            1.0,
+            0.0,
+        ))
+        .with_style(Style::filled(palette::teal()).with_stroke(palette::white(), 3.0)),
+    );
+    s.add(
+        Mobject::new(geometry::annular_sector(
+            Point::new(2.0, 0.8),
+            0.45,
+            1.1,
+            0.3,
+            2.2,
+        ))
+        .with_style(Style::filled(palette::purple()).with_stroke(palette::white(), 3.0)),
+    );
+    add_curved_arrow(
+        &mut s.graph,
+        Point::new(-2.5, -1.8),
+        Point::new(2.5, -1.2),
+        1.2,
+        Style::default().with_stroke(palette::yellow(), 5.0),
+    );
+    out.push(probe("shapes2", s, &[0.0]));
+
+    // angle + right angle
+    let mut s = Scene::new();
+    let v = Point::ORIGIN;
+    let a = Point::new(2.4, 0.4);
+    let b = Point::new(0.6, 2.2);
+    s.add(
+        Mobject::new(geometry::line(v, a))
+            .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+    );
+    s.add(
+        Mobject::new(geometry::line(v, b))
+            .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+    );
+    add_angle(
+        &mut s.graph,
+        v,
+        a,
+        b,
+        0.7,
+        Style::default().with_stroke(palette::yellow(), 5.0).no_fill(),
+    );
+    add_right_angle(
+        &mut s.graph,
+        Point::new(-3.0, -1.2),
+        Point::new(-1.4, -1.2),
+        Point::new(-3.0, 0.4),
+        0.35,
+        Style::default().with_stroke(palette::teal(), 5.0).no_fill(),
+    );
+    s.add(
+        Mobject::new(geometry::line(
+            Point::new(-3.0, -1.2),
+            Point::new(-1.2, -1.2),
+        ))
+        .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+    );
+    s.add(
+        Mobject::new(geometry::line(
+            Point::new(-3.0, -1.2),
+            Point::new(-3.0, 0.6),
+        ))
+        .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+    );
+    out.push(probe("angle", s, &[0.0]));
+
+    // polar plane
+    let mut s = Scene::new();
+    add_polar_plane(
+        &mut s.graph,
+        &PolarPlaneOpts {
+            radius: 3.2,
+            radius_step: 1.0,
+            azimuth_divisions: 12,
+            faded_line_ratio: 2,
+            ..PolarPlaneOpts::default()
+        },
+        Style::default()
+            .with_stroke(palette::blue_d(), 2.0)
+            .with_opacity(0.75),
+        Style::default().with_stroke(palette::white(), 3.0),
+    );
+    out.push(probe("polar", s, &[0.0]));
+
+    // title + decimal
+    let mut s = Scene::new();
+    add_title(&mut s.graph, "Title", &MathOptions::default()).expect("title");
+    let dec = add_decimal(&mut s.graph, std::f64::consts::PI, 3, &MathOptions::default())
+        .expect("decimal");
+    s.graph.set_y(dec, -0.8);
+    out.push(probe("title", s, &[0.0]));
+
+    // flash
+    let mut s = Scene::new();
+    s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 0.25))
+            .with_style(Style::filled(palette::yellow()).no_stroke()),
+    );
+    s.play_flash(Point::ORIGIN, 1.0, palette::yellow());
+    out.push(probe("flash", s, &[0.0, 0.35, 0.7, 1.0]));
+
+    // move along path
+    let mut s = Scene::new();
+    let path = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 2.0))
+            .with_style(Style::default().with_stroke(palette::gray(), 3.0).no_fill()),
+    );
+    let dot = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 0.18))
+            .with_style(Style::filled(palette::red()).no_stroke()),
+    );
+    s.play_move_along_path(dot, path, 1.2);
+    out.push(probe("along", s, &[0.0, 0.3, 0.6, 0.9, 1.2]));
+
+    // spin in a star
+    let mut s = Scene::new();
+    let star = s.add(
+        Mobject::new(geometry::star(
+            Point::ORIGIN,
+            5,
+            1.4,
+            None,
+            std::f64::consts::FRAC_PI_2,
+        ))
+        .with_style(Style::filled(palette::gold()).with_stroke(palette::white(), 3.0)),
+    );
+    s.play_spin_in(star, 1.0);
+    out.push(probe("spin", s, &[0.0, 0.35, 0.7, 1.0]));
 
     out
 }

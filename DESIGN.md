@@ -89,4 +89,8 @@ crates/
   DrawBorderThenFill / Wiggle / Circumscribe, camera shift+zoom as
   timeline data (not a node), `to_corner` / `set_x`/`set_y` / `flip` /
   `stretch` / `arrange_in_grid` / `set_width`/`set_height`
+- M11 more 2D CE: Star / RegularPolygon / AnnularSector / CurvedArrow /
+  Angle / RightAngle, PolarPlane, Title / DecimalNumber / BraceLabel,
+  full Manim A–E palette lookup, MoveAlongPath / ShowPassingFlash /
+  Flash / GrowFromPoint / SpinInFromNothing / ShrinkToCenter
 - M8 (later) 3D spike: cube pass composited under 2D overlay

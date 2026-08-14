@@ -15,35 +15,23 @@ use manim_core::constants::{
 use manim_core::kurbo::{Point, Vec2};
 use manim_core::peniko::Color;
 use manim_core::{
-    add_arrow as rust_add_arrow, add_axes as rust_add_axes, add_brace as rust_add_brace,
-    add_cross as rust_add_cross, add_double_arrow as rust_add_double_arrow,
-    add_number_line as rust_add_number_line, add_number_plane as rust_add_number_plane,
-    add_surrounding_rect as rust_add_surrounding_rect, add_underline as rust_add_underline,
-    add_vector as rust_add_vector, geometry, palette, AxesOpts, Mobject, NodeId, NumberLineOpts,
-    NumberPlaneOpts, Style,
+    add_angle as rust_add_angle, add_arrow as rust_add_arrow, add_axes as rust_add_axes,
+    add_background_rect as rust_add_background_rect, add_brace as rust_add_brace,
+    add_cross as rust_add_cross, add_curved_arrow as rust_add_curved_arrow,
+    add_double_arrow as rust_add_double_arrow, add_number_line as rust_add_number_line,
+    add_number_plane as rust_add_number_plane, add_polar_plane as rust_add_polar_plane,
+    add_right_angle as rust_add_right_angle, add_surrounding_rect as rust_add_surrounding_rect,
+    add_underline as rust_add_underline, add_vector as rust_add_vector, geometry, palette,
+    AxesOpts, Mobject, NodeId, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, Style,
 };
 use manim_render::{render_video, Renderer};
-use manim_typst::{add_math, add_tex as add_latex, add_text as rust_add_text, MathOptions};
+use manim_typst::{
+    add_brace_label as rust_add_brace_label, add_decimal as rust_add_decimal, add_math,
+    add_tex as add_latex, add_text as rust_add_text, add_title as rust_add_title, MathOptions,
+};
 
 fn parse_color(s: &str) -> PyResult<Color> {
-    let named = |name: &str| match name {
-        "white" => Some(palette::white()),
-        "black" => Some(palette::black()),
-        "blue" => Some(palette::blue()),
-        "green" => Some(palette::green()),
-        "yellow" => Some(palette::yellow()),
-        "red" => Some(palette::red()),
-        "gray" | "grey" => Some(palette::gray()),
-        "teal" => Some(palette::teal()),
-        "orange" => Some(palette::orange()),
-        "purple" => Some(palette::purple()),
-        "pink" => Some(palette::pink()),
-        "gold" => Some(palette::gold()),
-        "maroon" => Some(palette::maroon()),
-        "blue_d" => Some(palette::blue_d()),
-        _ => None,
-    };
-    if let Some(c) = named(&s.to_lowercase()) {
+    if let Some(c) = palette::named(s) {
         return Ok(c);
     }
     let hex = s.strip_prefix('#').unwrap_or(s);
@@ -773,6 +761,294 @@ impl PyScene {
 
     fn rotate(&mut self, target: NodeId, angle: f64) {
         self.scene.graph.rotate_about_center(target, angle);
+    }
+
+    fn set_color(&mut self, target: NodeId, color: &str) -> PyResult<()> {
+        self.scene.graph.set_color(target, parse_color(color)?);
+        Ok(())
+    }
+
+    #[pyo3(signature = (points, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_polygon(
+        &mut self,
+        points: Vec<(f64, f64)>,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let pts: Vec<Point> = points.into_iter().map(|(x, y)| Point::new(x, y)).collect();
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self
+            .scene
+            .add(Mobject::new(geometry::polygon(&pts)).with_style(style)))
+    }
+
+    #[pyo3(signature = (sides = 6, radius = 1.0, x = 0.0, y = 0.0, rotation = 0.0, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_regular_polygon(
+        &mut self,
+        sides: usize,
+        radius: f64,
+        x: f64,
+        y: f64,
+        rotation: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::regular_polygon(
+                Point::new(x, y),
+                sides,
+                radius,
+                rotation,
+            ))
+            .with_style(style),
+        ))
+    }
+
+    #[pyo3(signature = (n = 5, outer = 1.0, inner = None, x = 0.0, y = 0.0, rotation = 1.5707963267948966, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_star(
+        &mut self,
+        n: usize,
+        outer: f64,
+        inner: Option<f64>,
+        x: f64,
+        y: f64,
+        rotation: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::star(Point::new(x, y), n, outer, inner, rotation))
+                .with_style(style),
+        ))
+    }
+
+    #[pyo3(signature = (x1, y1, x2, y2, sweep = 1.5707963267948966, stroke = Some("white".to_string()), stroke_width = 6.0))]
+    fn add_curved_arrow(
+        &mut self,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        sweep: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_curved_arrow(
+            &mut self.scene.graph,
+            Point::new(x1, y1),
+            Point::new(x2, y2),
+            sweep,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (vx, vy, x1, y1, x2, y2, radius = 0.4, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_angle(
+        &mut self,
+        vx: f64,
+        vy: f64,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        radius: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_angle(
+            &mut self.scene.graph,
+            Point::new(vx, vy),
+            Point::new(x1, y1),
+            Point::new(x2, y2),
+            radius,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (vx, vy, x1, y1, x2, y2, size = 0.3, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_right_angle(
+        &mut self,
+        vx: f64,
+        vy: f64,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        size: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_right_angle(
+            &mut self.scene.graph,
+            Point::new(vx, vy),
+            Point::new(x1, y1),
+            Point::new(x2, y2),
+            size,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (radius = 4.0, radius_step = 1.0, azimuth_divisions = 12, faded_line_ratio = 1, grid = Some("blue_d".to_string()), axis = Some("white".to_string())))]
+    fn add_polar_plane(
+        &mut self,
+        radius: f64,
+        radius_step: f64,
+        azimuth_divisions: u32,
+        faded_line_ratio: u32,
+        grid: Option<String>,
+        axis: Option<String>,
+    ) -> PyResult<usize> {
+        let grid_style = build_style(None, grid.as_deref(), 2.0)?;
+        let axis_style = build_style(None, axis.as_deref(), 3.0)?;
+        Ok(rust_add_polar_plane(
+            &mut self.scene.graph,
+            &PolarPlaneOpts {
+                radius,
+                radius_step,
+                azimuth_divisions,
+                faded_line_ratio,
+                ..PolarPlaneOpts::default()
+            },
+            grid_style,
+            axis_style,
+        ))
+    }
+
+    #[pyo3(signature = (source, color = None, font_size_pt = 48.0))]
+    fn add_title(
+        &mut self,
+        source: &str,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_title(&mut self.scene.graph, source, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (value, places = 2, x = 0.0, y = 0.0, color = None, font_size_pt = 48.0))]
+    fn add_decimal(
+        &mut self,
+        value: f64,
+        places: usize,
+        x: f64,
+        y: f64,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        let id = rust_add_decimal(&mut self.scene.graph, value, places, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        self.scene.graph.get_mut(id).transform =
+            manim_core::kurbo::Affine::translate((x, y));
+        Ok(id)
+    }
+
+    #[pyo3(signature = (target, label, direction = "down", font_size_pt = 36.0))]
+    fn add_brace_label(
+        &mut self,
+        target: NodeId,
+        label: &str,
+        direction: &str,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: None,
+        };
+        rust_add_brace_label(
+            &mut self.scene.graph,
+            target,
+            parse_direction(direction)?,
+            label,
+            &options,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (target, buff = 0.15, fill = "black", opacity = 0.75))]
+    fn add_background_rect(
+        &mut self,
+        target: NodeId,
+        buff: f64,
+        fill: &str,
+        opacity: f32,
+    ) -> PyResult<usize> {
+        Ok(rust_add_background_rect(
+            &mut self.scene.graph,
+            target,
+            buff,
+            parse_color(fill)?,
+            opacity,
+        ))
+    }
+
+    #[pyo3(signature = (target, path, duration = 1.0, easing = "smooth"))]
+    fn play_move_along_path(
+        &mut self,
+        target: NodeId,
+        path: NodeId,
+        duration: f64,
+        easing: &str,
+    ) -> PyResult<()> {
+        let a = Animation::move_along_path(&self.scene.graph, target, path, duration)
+            .with_easing(parse_easing(easing)?);
+        self.scene.play([a]);
+        Ok(())
+    }
+
+    #[pyo3(signature = (x, y, duration = 1.0, color = "yellow"))]
+    fn play_flash(&mut self, x: f64, y: f64, duration: f64, color: &str) -> PyResult<()> {
+        self.scene
+            .play_flash(Point::new(x, y), duration, parse_color(color)?);
+        Ok(())
+    }
+
+    #[pyo3(signature = (target, duration = 1.0))]
+    fn play_show_passing_flash(&mut self, target: NodeId, duration: f64) {
+        self.scene.play_show_passing_flash(target, duration);
+    }
+
+    #[pyo3(signature = (target, x, y, duration = 1.0, easing = "smooth"))]
+    fn play_grow_from_point(
+        &mut self,
+        target: NodeId,
+        x: f64,
+        y: f64,
+        duration: f64,
+        easing: &str,
+    ) -> PyResult<()> {
+        let a = Animation::grow_from_point(&self.scene.graph, target, Point::new(x, y), duration)
+            .with_easing(parse_easing(easing)?);
+        self.scene.play([a]);
+        Ok(())
+    }
+
+    #[pyo3(signature = (target, duration = 1.0))]
+    fn play_spin_in(&mut self, target: NodeId, duration: f64) {
+        self.scene.play_spin_in(target, duration);
+    }
+
+    #[pyo3(signature = (target, duration = 1.0, easing = "smooth"))]
+    fn play_shrink(&mut self, target: NodeId, duration: f64, easing: &str) -> PyResult<()> {
+        let a = Animation::shrink_to_center(&self.scene.graph, target, duration)
+            .with_easing(parse_easing(easing)?);
+        self.scene.play([a]);
+        Ok(())
     }
 
     #[pyo3(signature = (target, color, duration = 1.0, easing = "smooth"))]

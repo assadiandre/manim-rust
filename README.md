@@ -66,10 +66,12 @@ scene.render("media/demo.mp4", fps=60)
 ```
 
 Layout, arrows, and axes follow ManimCE names (`next_to`, `arrange`,
-`Write`, `Indicate`, `Circumscribe`). Function plots are sampled once at
-authoring time — the per-frame path never calls back into Python. Plain
-text uses in-process Typst (`add_text`); the camera is timeline data
-(`play_camera_shift` / `play_camera_zoom`), not a scene-graph node.
+`Write`, `Indicate`, `Circumscribe`, `Flash`, `MoveAlongPath`). Function
+plots are sampled once at authoring time — the per-frame path never
+calls back into Python. Plain text uses in-process Typst (`add_text` /
+`add_title`); the camera is timeline data (`play_camera_shift` /
+`play_camera_zoom`), not a scene-graph node. Color names accept the
+Manim A–E palette (`blue_c`, `yellow_c`, …).
 
 ```python
 axes = scene.add_axes(x_min=-3, x_max=3, y_min=-1, y_max=3)
