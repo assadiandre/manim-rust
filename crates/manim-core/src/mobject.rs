@@ -14,6 +14,8 @@ pub struct Mobject {
     pub style: Style,
     pub transform: Affine,
     pub visible: bool,
+    /// Higher draws later (on top). Manim `z_index`.
+    pub z_index: i32,
 }
 
 impl Mobject {
@@ -24,6 +26,7 @@ impl Mobject {
             style: Style::default(),
             transform: Affine::IDENTITY,
             visible: true,
+            z_index: 0,
         }
     }
 
@@ -55,5 +58,10 @@ impl Mobject {
     pub fn scaled(self, factor: f64) -> Self {
         let t = Affine::scale(factor) * self.transform;
         self.with_transform(t)
+    }
+
+    pub fn with_z_index(mut self, z: i32) -> Self {
+        self.z_index = z;
+        self
     }
 }

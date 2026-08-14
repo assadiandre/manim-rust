@@ -211,7 +211,13 @@ impl SceneGraph {
                 stack.push((c, world, opacity));
             }
         }
+        // Stable by tree order, then z_index so higher values paint on top.
+        out.sort_by_key(|(id, _, _)| self.nodes[*id].mobject.z_index);
         out
+    }
+
+    pub fn set_z_index(&mut self, id: NodeId, z: i32) {
+        self.get_mut(id).z_index = z;
     }
 }
 
@@ -250,5 +256,15 @@ mod tests {
         let t = g.world_transform(child);
         let p = t * kurbo::Point::ORIGIN;
         assert!((p.x - 1.0).abs() < 1e-9 && (p.y - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn higher_z_index_paints_later() {
+        let mut g = SceneGraph::new();
+        let a = g.add(Mobject::new(geometry::circle(kurbo::Point::ORIGIN, 1.0)));
+        let b = g.add(Mobject::new(geometry::square(kurbo::Point::ORIGIN, 2.0)));
+        g.set_z_index(a, 5);
+        let order: Vec<NodeId> = g.traverse().into_iter().map(|(id, _, _)| id).collect();
+        assert_eq!(order, vec![b, a]);
     }
 }

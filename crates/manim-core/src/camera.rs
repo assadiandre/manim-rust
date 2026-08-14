@@ -11,7 +11,7 @@ pub trait Camera {
 
 /// Orthographic 2D camera with a Manim-compatible frame: `frame_height`
 /// logical units span the image vertically, y-axis points up.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OrthoCamera2D {
     pub center: Point,
     pub frame_height: f64,

@@ -43,6 +43,15 @@ pub mod palette {
     pub fn maroon() -> Color {
         Color::from_rgba8(197, 95, 115, 255) // MAROON_C
     }
+    pub fn blue_d() -> Color {
+        Color::from_rgba8(41, 171, 202, 255) // BLUE_D
+    }
+    pub fn grey() -> Color {
+        Color::from_rgba8(136, 136, 136, 255)
+    }
+    pub fn pure_yellow() -> Color {
+        Color::from_rgba8(255, 255, 0, 255)
+    }
 }
 
 /// Multiply a color's alpha by `opacity` (0..=1).
@@ -130,4 +139,13 @@ impl Style {
     pub fn is_invisible(&self) -> bool {
         self.opacity <= 0.0 || (self.effective_fill().is_none() && self.effective_stroke().is_none())
     }
+}
+
+/// Linear interpolation in sRGB bytes (Manim's `interpolate_color` flavor).
+pub fn lerp_color(a: Color, b: Color, t: f32) -> Color {
+    let t = t.clamp(0.0, 1.0);
+    let a = a.to_rgba8();
+    let b = b.to_rgba8();
+    let mix = |x: u8, y: u8| ((x as f32) * (1.0 - t) + (y as f32) * t).round() as u8;
+    Color::from_rgba8(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a))
 }

@@ -173,6 +173,54 @@ pub fn default_tip_length(length: f64) -> f64 {
     DEFAULT_ARROW_TIP_LENGTH.min(0.25 * length)
 }
 
+/// Parametric polyline `t ∈ [t0, t1] → (x(t), y(t))`.
+pub fn parametric(t0: f64, t1: f64, samples: usize, f: impl Fn(f64) -> Point) -> BezPath {
+    let n = samples.max(2);
+    let mut pts = Vec::with_capacity(n);
+    for i in 0..n {
+        let t = t0 + (t1 - t0) * i as f64 / (n - 1) as f64;
+        pts.push(f(t));
+    }
+    polyline(&pts)
+}
+
+/// L-shaped elbow at `corner`, arms of length `size` along +x and +y after `angle`.
+pub fn elbow(corner: Point, size: f64, angle: f64) -> BezPath {
+    let a = Vec2::new(angle.cos(), angle.sin()) * size;
+    let b = Vec2::new(-angle.sin(), angle.cos()) * size;
+    polyline(&[corner + a, corner, corner + b])
+}
+
+/// Curly brace of `width`, tip pointing +y, centered on the origin.
+pub fn brace(width: f64) -> BezPath {
+    let half = (width * 0.5).max(0.25);
+    let depth = 0.22;
+    let tip = 0.16;
+    let mut p = BezPath::new();
+    p.move_to(Point::new(-half, 0.0));
+    p.curve_to(
+        Point::new(-half + 0.12, 0.0),
+        Point::new(-half * 0.45, -depth),
+        Point::new(-0.14, -depth),
+    );
+    p.curve_to(
+        Point::new(-0.05, -depth),
+        Point::new(-0.03, tip),
+        Point::new(0.0, tip),
+    );
+    p.curve_to(
+        Point::new(0.03, tip),
+        Point::new(0.05, -depth),
+        Point::new(0.14, -depth),
+    );
+    p.curve_to(
+        Point::new(half * 0.45, -depth),
+        Point::new(half - 0.12, 0.0),
+        Point::new(half, 0.0),
+    );
+    p
+}
+
 /// Sample `f` on `[x_min, x_max]` into a polyline, scaled into scene units.
 pub fn plot(x_min: f64, x_max: f64, samples: usize, unit_x: f64, unit_y: f64, f: impl Fn(f64) -> f64) -> BezPath {
     let n = samples.max(2);

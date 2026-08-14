@@ -21,10 +21,14 @@ pub use constants::{
     DEFAULT_MOBJECT_TO_MOBJECT_BUFFER, DOWN, DL, DR, FRAME_HEIGHT, FRAME_WIDTH, FRAME_X_RADIUS,
     FRAME_Y_RADIUS, LEFT, MED_SMALL_BUFF, ORIGIN, PI, RIGHT, TAU, UL, UP, UR,
 };
-pub use construct::{add_arrow, add_axes, add_dot, add_number_line, AxesOpts, NumberLineOpts};
+pub use construct::{
+    add_arrow, add_axes, add_brace, add_cross, add_dot, add_double_arrow, add_number_line,
+    add_number_plane, add_surrounding_rect, add_underline, add_vector, AxesOpts, NumberLineOpts,
+    NumberPlaneOpts,
+};
 pub use mobject::Mobject;
 pub use scene::{NodeId, SceneGraph};
-pub use style::{palette, Style};
+pub use style::{lerp_color, palette, Style};
 
 // Re-export the data model so downstream crates stay version-consistent.
 pub use kurbo;

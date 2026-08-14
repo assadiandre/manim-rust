@@ -189,6 +189,114 @@ impl SceneGraph {
     pub fn arrange_default(&mut self, group: NodeId, direction: Vec2) {
         self.arrange(group, direction, DEFAULT_MOBJECT_TO_MOBJECT_BUFFER, true);
     }
+
+    /// Alias for `to_edge` with a corner direction (Manim `to_corner`).
+    pub fn to_corner(&mut self, id: NodeId, corner: Vec2, buff: f64) {
+        self.to_edge(id, corner, buff);
+    }
+
+    pub fn set_x(&mut self, id: NodeId, x: f64) {
+        let c = self.center_of(id);
+        self.shift(id, Vec2::new(x - c.x, 0.0));
+    }
+
+    pub fn set_y(&mut self, id: NodeId, y: f64) {
+        let c = self.center_of(id);
+        self.shift(id, Vec2::new(0.0, y - c.y));
+    }
+
+    /// Manim `flip`: `UP`/`DOWN` mirrors in x; `LEFT`/`RIGHT` mirrors in y.
+    pub fn flip(&mut self, id: NodeId, axis: Vec2) {
+        let about = self.local_pivot(id);
+        let (sx, sy) = if axis.y.abs() >= axis.x.abs() {
+            (-1.0, 1.0)
+        } else {
+            (1.0, -1.0)
+        };
+        let flip = Affine::translate(about.to_vec2())
+            * Affine::scale_non_uniform(sx, sy)
+            * Affine::translate(-about.to_vec2());
+        let t = self.get(id).transform;
+        self.get_mut(id).transform = t * flip;
+    }
+
+    /// Non-uniform scale about the local pivot. `dim` 0 = x, 1 = y.
+    pub fn stretch(&mut self, id: NodeId, factor: f64, dim: usize) {
+        let about = self.local_pivot(id);
+        let (sx, sy) = if dim == 0 { (factor, 1.0) } else { (1.0, factor) };
+        let s = Affine::translate(about.to_vec2())
+            * Affine::scale_non_uniform(sx, sy)
+            * Affine::translate(-about.to_vec2());
+        let t = self.get(id).transform;
+        self.get_mut(id).transform = t * s;
+    }
+
+    /// Row-major grid of a group's children (Manim `arrange_in_grid`).
+    pub fn arrange_in_grid(
+        &mut self,
+        group: NodeId,
+        rows: Option<usize>,
+        cols: Option<usize>,
+        buff_x: f64,
+        buff_y: f64,
+        center: bool,
+    ) {
+        let kids: Vec<NodeId> = self.children_of(group).to_vec();
+        if kids.is_empty() {
+            return;
+        }
+        let n = kids.len();
+        let cols = cols.unwrap_or_else(|| {
+            let r = rows.unwrap_or((n as f64).sqrt().ceil() as usize).max(1);
+            n.div_ceil(r)
+        });
+        let cols = cols.max(1);
+        for (i, &id) in kids.iter().enumerate() {
+            let col = i % cols;
+            if col > 0 {
+                self.next_to(id, kids[i - 1], crate::constants::RIGHT, buff_x);
+                self.align_to(id, kids[i - col], crate::constants::UP);
+            } else if i > 0 {
+                self.next_to(id, kids[i - cols], crate::constants::DOWN, buff_y);
+            }
+        }
+        if center {
+            self.move_to(group, Point::ORIGIN);
+        }
+    }
+
+    /// Uniform scale about the local visual center.
+    pub fn scale_about_center(&mut self, id: NodeId, factor: f64) {
+        let about = self.local_pivot(id);
+        let s = Affine::translate(about.to_vec2())
+            * Affine::scale(factor)
+            * Affine::translate(-about.to_vec2());
+        let t = self.get(id).transform;
+        self.get_mut(id).transform = t * s;
+    }
+
+    /// Rotate about the local visual center (Manim `rotate`).
+    pub fn rotate_about_center(&mut self, id: NodeId, angle: f64) {
+        let about = self.local_pivot(id);
+        let t = self.get(id).transform;
+        self.get_mut(id).transform = t * Affine::rotate_about(angle, about);
+    }
+
+    /// Scale so the world-space bbox width becomes `width` (Manim `set_width`).
+    pub fn set_width(&mut self, id: NodeId, width: f64) {
+        let w = self.bounding_box(id).width();
+        if w > 1e-9 && width > 0.0 {
+            self.scale_about_center(id, width / w);
+        }
+    }
+
+    /// Scale so the world-space bbox height becomes `height` (Manim `set_height`).
+    pub fn set_height(&mut self, id: NodeId, height: f64) {
+        let h = self.bounding_box(id).height();
+        if h > 1e-9 && height > 0.0 {
+            self.scale_about_center(id, height / h);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -306,5 +414,53 @@ mod tests {
         g.shift(child, Vec2::new(0.0, 2.0));
         let p = g.center_of(child);
         assert!((p.x - 1.0).abs() < 1e-9 && (p.y - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn set_x_keeps_y() {
+        let mut g = SceneGraph::new();
+        let c = circle_at(&mut g, Point::new(0.0, 1.0), 0.5);
+        g.set_x(c, 3.0);
+        let p = g.center_of(c);
+        assert!((p.x - 3.0).abs() < 1e-6 && (p.y - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn flip_up_mirrors_x() {
+        let mut g = SceneGraph::new();
+        let id = g.add(Mobject::new(geometry::line(
+            Point::new(0.0, 0.0),
+            Point::new(1.0, 1.0),
+        )));
+        g.flip(id, UP);
+        let t = g.world_transform(id);
+        let a = t * Point::new(0.0, 0.0);
+        let b = t * Point::new(1.0, 1.0);
+        assert!((a.x - 1.0).abs() < 1e-6 && a.y.abs() < 1e-6, "{a:?}");
+        assert!(b.x.abs() < 1e-6 && (b.y - 1.0).abs() < 1e-6, "{b:?}");
+    }
+
+    #[test]
+    fn arrange_in_grid_is_2x2() {
+        let mut g = SceneGraph::new();
+        let ids: Vec<_> = (0..4)
+            .map(|_| circle_at(&mut g, Point::ORIGIN, 0.4))
+            .collect();
+        let grp = g.group_nodes(&ids);
+        g.arrange_in_grid(grp, Some(2), Some(2), 0.2, 0.2, true);
+        let ys: Vec<f64> = ids.iter().map(|&id| g.center_of(id).y).collect();
+        assert!((ys[0] - ys[1]).abs() < 1e-6, "row 0 should share y");
+        assert!((ys[2] - ys[3]).abs() < 1e-6, "row 1 should share y");
+        assert!(ys[0] > ys[2], "row 0 above row 1");
+    }
+
+    #[test]
+    fn set_width_scales_circle() {
+        let mut g = SceneGraph::new();
+        let c = circle_at(&mut g, Point::ORIGIN, 1.0);
+        g.set_width(c, 3.0);
+        let bb = g.bounding_box(c);
+        assert!((bb.width() - 3.0).abs() < 1e-6, "w={}", bb.width());
+        assert!((bb.height() - 3.0).abs() < 1e-6, "h={}", bb.height());
     }
 }
