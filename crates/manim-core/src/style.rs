@@ -52,6 +52,88 @@ pub mod palette {
     pub fn pure_yellow() -> Color {
         Color::from_rgba8(255, 255, 0, 255)
     }
+
+    fn hex(rgb: u32) -> Color {
+        Color::from_rgba8(
+            ((rgb >> 16) & 0xff) as u8,
+            ((rgb >> 8) & 0xff) as u8,
+            (rgb & 0xff) as u8,
+            255,
+        )
+    }
+
+    /// ManimCE color names (case-insensitive). `yellow` stays `#FFFF00` so
+    /// existing scenes/goldens do not shift; CE's `YELLOW` is `yellow_c`.
+    pub fn named(s: &str) -> Option<Color> {
+        let k = s.trim().to_ascii_lowercase().replace('-', "_");
+        Some(match k.as_str() {
+            "white" => white(),
+            "black" => black(),
+            "blue" | "blue_c" => blue(),
+            "blue_a" => hex(0xC7E9F1),
+            "blue_b" => hex(0x9CDCEB),
+            "blue_d" => blue_d(),
+            "blue_e" | "dark_blue" => hex(0x236B8E),
+            "teal" | "teal_c" => teal(),
+            "teal_a" => hex(0xACEAD7),
+            "teal_b" => hex(0x76DDC0),
+            "teal_d" => hex(0x55C1A7),
+            "teal_e" => hex(0x49A88F),
+            "green" | "green_c" => green(),
+            "green_a" => hex(0xC9E2AE),
+            "green_b" => hex(0xA6CF8C),
+            "green_d" => hex(0x77B05D),
+            "green_e" => hex(0x699C52),
+            "yellow" | "pure_yellow" => yellow(),
+            "yellow_a" => hex(0xFFF1B6),
+            "yellow_b" => hex(0xFFEA94),
+            "yellow_c" => hex(0xF7D96F),
+            "yellow_d" => hex(0xF4D345),
+            "yellow_e" => hex(0xE8C11C),
+            "gold" | "gold_c" => gold(),
+            "gold_a" => hex(0xF7C797),
+            "gold_b" => hex(0xF9B775),
+            "gold_d" => hex(0xE1A158),
+            "gold_e" => hex(0xC78D46),
+            "red" | "red_c" => red(),
+            "red_a" => hex(0xF7A1A3),
+            "red_b" => hex(0xFF8080),
+            "red_d" => hex(0xE65A4C),
+            "red_e" => hex(0xCF5044),
+            "maroon" | "maroon_c" => maroon(),
+            "maroon_a" => hex(0xECABC1),
+            "maroon_b" => hex(0xEC92AB),
+            "maroon_d" => hex(0xA24D61),
+            "maroon_e" => hex(0x94424F),
+            "purple" | "purple_c" => purple(),
+            "purple_a" => hex(0xCAA3E8),
+            "purple_b" => hex(0xB189C6),
+            "purple_d" => hex(0x715582),
+            "purple_e" => hex(0x644172),
+            "pink" => pink(),
+            "light_pink" => hex(0xDC75CD),
+            "orange" => orange(),
+            "light_brown" => hex(0xCD853F),
+            "dark_brown" => hex(0x8B4513),
+            "gray_brown" | "grey_brown" => hex(0x736357),
+            "gray" | "grey" | "gray_c" | "grey_c" => gray(),
+            "gray_a" | "grey_a" | "lighter_gray" | "lighter_grey" => hex(0xDDDDDD),
+            "gray_b" | "grey_b" | "light_gray" | "light_grey" => hex(0xBBBBBB),
+            "gray_d" | "grey_d" | "dark_gray" | "dark_grey" => hex(0x444444),
+            "gray_e" | "grey_e" | "darker_gray" | "darker_grey" => hex(0x222222),
+            "pure_red" => hex(0xFF0000),
+            "pure_green" => hex(0x00FF00),
+            "pure_blue" => hex(0x0000FF),
+            "pure_cyan" => hex(0x00FFFF),
+            "pure_magenta" => hex(0xFF00FF),
+            "logo_white" => hex(0xECE7E2),
+            "logo_green" => hex(0x87C2A5),
+            "logo_blue" => hex(0x525893),
+            "logo_red" => hex(0xE07A5F),
+            "logo_black" => hex(0x343434),
+            _ => return None,
+        })
+    }
 }
 
 /// Multiply a color's alpha by `opacity` (0..=1).
@@ -148,4 +230,17 @@ pub fn lerp_color(a: Color, b: Color, t: f32) -> Color {
     let b = b.to_rgba8();
     let mix = |x: u8, y: u8| ((x as f32) * (1.0 - t) + (y as f32) * t).round() as u8;
     Color::from_rgba8(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b), mix(a.a, b.a))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn named_yellow_stays_pure_for_compat() {
+        let y = palette::named("yellow").unwrap().to_rgba8();
+        assert_eq!((y.r, y.g, y.b), (255, 255, 0));
+        let yc = palette::named("YELLOW_C").unwrap().to_rgba8();
+        assert_eq!((yc.r, yc.g, yc.b), (0xF7, 0xD9, 0x6F));
+    }
 }

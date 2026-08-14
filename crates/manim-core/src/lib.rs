@@ -22,9 +22,10 @@ pub use constants::{
     FRAME_Y_RADIUS, LEFT, MED_SMALL_BUFF, ORIGIN, PI, RIGHT, TAU, UL, UP, UR,
 };
 pub use construct::{
-    add_arrow, add_axes, add_brace, add_cross, add_dot, add_double_arrow, add_number_line,
-    add_number_plane, add_surrounding_rect, add_underline, add_vector, AxesOpts, NumberLineOpts,
-    NumberPlaneOpts,
+    add_angle, add_arrow, add_axes, add_background_rect, add_brace, add_cross, add_curved_arrow,
+    add_dot, add_double_arrow, add_number_line, add_number_plane, add_polar_plane,
+    add_right_angle, add_surrounding_rect, add_underline, add_vector, AxesOpts, NumberLineOpts,
+    NumberPlaneOpts, PolarPlaneOpts,
 };
 pub use mobject::Mobject;
 pub use scene::{NodeId, SceneGraph};

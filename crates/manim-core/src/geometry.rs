@@ -221,6 +221,138 @@ pub fn brace(width: f64) -> BezPath {
     p
 }
 
+/// Star polygon (Manim `Star`). `inner` `None` uses the CE density-2 radius.
+pub fn star(center: Point, n: usize, outer: f64, inner: Option<f64>, rotation: f64) -> BezPath {
+    let n = n.max(3);
+    let inner_angle = std::f64::consts::TAU / (2.0 * n as f64);
+    let inner_r = inner.unwrap_or_else(|| {
+        let density = 2.0_f64;
+        let outer_angle = std::f64::consts::TAU * density / n as f64;
+        let inverse_x =
+            1.0 - inner_angle.tan() * ((outer_angle.cos() - 1.0) / outer_angle.sin());
+        outer / (inner_angle.cos() * inverse_x)
+    });
+    let mut pts = Vec::with_capacity(2 * n);
+    for i in 0..n {
+        let ao = rotation + i as f64 / n as f64 * std::f64::consts::TAU;
+        let ai = ao + inner_angle;
+        pts.push(center + Vec2::new(ao.cos() * outer, ao.sin() * outer));
+        pts.push(center + Vec2::new(ai.cos() * inner_r, ai.sin() * inner_r));
+    }
+    polygon(&pts)
+}
+
+/// Circular arc from `start` to `end` with signed sweep (Manim `ArcBetweenPoints`).
+pub fn arc_between_points(start: Point, end: Point, sweep: f64) -> BezPath {
+    if sweep.abs() < 1e-9 {
+        return line(start, end);
+    }
+    let chord = end - start;
+    let dist = chord.hypot();
+    if dist < 1e-12 {
+        return BezPath::new();
+    }
+    let r = dist / (2.0 * (sweep.abs() / 2.0).sin());
+    let mid = start.lerp(end, 0.5);
+    let perp = Vec2::new(-chord.y, chord.x) / dist;
+    let offset = r * (sweep.abs() / 2.0).cos();
+    let center = mid + perp * offset * sweep.signum();
+    let start_angle = (start.y - center.y).atan2(start.x - center.x);
+    arc(center, r, start_angle, sweep)
+}
+
+/// Ring slice (Manim `AnnularSector`).
+pub fn annular_sector(
+    center: Point,
+    inner: f64,
+    outer: f64,
+    start: f64,
+    sweep: f64,
+) -> BezPath {
+    let n = 32.max((sweep.abs() * 24.0) as usize);
+    let mut p = BezPath::new();
+    for i in 0..=n {
+        let a = start + sweep * i as f64 / n as f64;
+        let pt = center + Vec2::new(a.cos() * outer, a.sin() * outer);
+        if i == 0 {
+            p.move_to(pt);
+        } else {
+            p.line_to(pt);
+        }
+    }
+    for i in 0..=n {
+        let a = start + sweep * (1.0 - i as f64 / n as f64);
+        p.line_to(center + Vec2::new(a.cos() * inner, a.sin() * inner));
+    }
+    p.close_path();
+    p
+}
+
+/// CCW arc from `p1` to `p2` about `vertex` (Manim `Angle`).
+pub fn angle_arc(vertex: Point, p1: Point, p2: Point, radius: f64) -> BezPath {
+    let a0 = (p1.y - vertex.y).atan2(p1.x - vertex.x);
+    let a1 = (p2.y - vertex.y).atan2(p2.x - vertex.x);
+    let mut sweep = a1 - a0;
+    if sweep <= 0.0 {
+        sweep += std::f64::consts::TAU;
+    }
+    arc(vertex, radius, a0, sweep)
+}
+
+/// Square corner between two directions (Manim `RightAngle`).
+pub fn right_angle(vertex: Point, p1: Point, p2: Point, size: f64) -> BezPath {
+    let n1 = {
+        let v = p1 - vertex;
+        let len = v.hypot();
+        if len < 1e-12 {
+            Vec2::new(1.0, 0.0)
+        } else {
+            v / len
+        }
+    };
+    let n2 = {
+        let v = p2 - vertex;
+        let len = v.hypot();
+        if len < 1e-12 {
+            Vec2::new(0.0, 1.0)
+        } else {
+            v / len
+        }
+    };
+    polyline(&[vertex + n1 * size, vertex + n1 * size + n2 * size, vertex + n2 * size])
+}
+
+pub fn cubic_bezier(p0: Point, p1: Point, p2: Point, p3: Point) -> BezPath {
+    let mut p = BezPath::new();
+    p.move_to(p0);
+    p.curve_to(p1, p2, p3);
+    p
+}
+
+/// Point at arc-length fraction `t` ∈ [0, 1].
+pub fn point_along(path: &BezPath, t: f64) -> Point {
+    let (pts, closed) = flatten_points(path);
+    if pts.is_empty() {
+        return Point::ORIGIN;
+    }
+    let cum = cumulative_lengths(&pts, closed);
+    let total = *cum.last().unwrap();
+    point_at_length(&pts, &cum, closed, total * t.clamp(0.0, 1.0))
+}
+
+/// Unit tangent at arc-length fraction `t`.
+pub fn tangent_along(path: &BezPath, t: f64) -> Vec2 {
+    let a = point_along(path, (t - 0.02).max(0.0));
+    let b = point_along(path, (t + 0.02).min(1.0));
+    let v = b - a;
+    let len = v.hypot();
+    if len < 1e-12 {
+        Vec2::new(1.0, 0.0)
+    } else {
+        v / len
+    }
+}
+
 /// Sample `f` on `[x_min, x_max]` into a polyline, scaled into scene units.
 pub fn plot(x_min: f64, x_max: f64, samples: usize, unit_x: f64, unit_y: f64, f: impl Fn(f64) -> f64) -> BezPath {
     let n = samples.max(2);

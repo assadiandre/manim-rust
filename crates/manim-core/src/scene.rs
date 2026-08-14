@@ -219,6 +219,23 @@ impl SceneGraph {
     pub fn set_z_index(&mut self, id: NodeId, z: i32) {
         self.get_mut(id).z_index = z;
     }
+
+    /// Recolor this node and descendants (Manim `set_color` on a VGroup).
+    pub fn set_color(&mut self, id: NodeId, color: crate::peniko::Color) {
+        let kids: Vec<NodeId> = self.children_of(id).to_vec();
+        {
+            let m = self.get_mut(id);
+            if m.style.fill.is_some() {
+                m.style.fill = Some(color);
+            }
+            if m.style.stroke.is_some() {
+                m.style.stroke = Some(color);
+            }
+        }
+        for c in kids {
+            self.set_color(c, color);
+        }
+    }
 }
 
 #[cfg(test)]

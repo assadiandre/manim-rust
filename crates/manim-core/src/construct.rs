@@ -420,6 +420,171 @@ pub fn add_number_plane(
     group
 }
 
+/// Arc plus a tip (Manim `CurvedArrow`).
+pub fn add_curved_arrow(
+    graph: &mut SceneGraph,
+    start: Point,
+    end: Point,
+    sweep: f64,
+    style: Style,
+) -> NodeId {
+    let full = geometry::arc_between_points(start, end, sweep);
+    let len = geometry::path_length(&full);
+    let tip_len = geometry::default_tip_length(len);
+    let t_end = (1.0 - (tip_len / len.max(1e-9))).clamp(0.55, 0.95);
+    let shaft = geometry::trim(&full, 0.0, t_end);
+    let tip_base = geometry::point_along(&full, t_end);
+    let tip = geometry::arrow_tip(tip_base, end, tip_len, tip_len * 0.7);
+    let color = style.stroke.or(style.fill).unwrap_or_else(palette::white);
+    let group = graph.add(Mobject::group().named("curved_arrow"));
+    graph.add_child(group, Mobject::new(shaft).with_style(style.clone().no_fill()));
+    graph.add_child(
+        group,
+        Mobject::new(tip).with_style(Style::filled(color).no_stroke()),
+    );
+    group
+}
+
+/// Angle mark between `p1`–`vertex`–`p2` (Manim `Angle`).
+pub fn add_angle(
+    graph: &mut SceneGraph,
+    vertex: Point,
+    p1: Point,
+    p2: Point,
+    radius: f64,
+    style: Style,
+) -> NodeId {
+    graph.add(
+        Mobject::new(geometry::angle_arc(vertex, p1, p2, radius))
+            .with_style(style)
+            .named("angle"),
+    )
+}
+
+pub fn add_right_angle(
+    graph: &mut SceneGraph,
+    vertex: Point,
+    p1: Point,
+    p2: Point,
+    size: f64,
+    style: Style,
+) -> NodeId {
+    graph.add(
+        Mobject::new(geometry::right_angle(vertex, p1, p2, size))
+            .with_style(style)
+            .named("right_angle"),
+    )
+}
+
+#[derive(Clone, Debug)]
+pub struct PolarPlaneOpts {
+    pub radius: f64,
+    pub radius_step: f64,
+    pub azimuth_divisions: u32,
+    pub unit_size: f64,
+    pub faded_line_ratio: u32,
+}
+
+impl Default for PolarPlaneOpts {
+    fn default() -> Self {
+        Self {
+            radius: crate::constants::FRAME_Y_RADIUS,
+            radius_step: 1.0,
+            azimuth_divisions: 12,
+            unit_size: 1.0,
+            faded_line_ratio: 1,
+        }
+    }
+}
+
+/// Concentric circles + radials (Manim `PolarPlane`, unlabeled).
+pub fn add_polar_plane(
+    graph: &mut SceneGraph,
+    opts: &PolarPlaneOpts,
+    grid_style: Style,
+    axis_style: Style,
+) -> NodeId {
+    let group = graph.add(Mobject::group().named("polar_plane"));
+    let u = opts.unit_size;
+    let r_max = opts.radius.max(0.1);
+    let faded = opts.faded_line_ratio.max(1);
+    let mut faded_style = grid_style.clone();
+    faded_style.stroke_opacity *= 0.35;
+    faded_style.stroke_width *= 0.6;
+
+    if faded > 1 && opts.radius_step > 0.0 {
+        let dr = opts.radius_step / faded as f64;
+        let n = (r_max / dr).round() as i32;
+        for i in 1..=n {
+            let r = i as f64 * dr;
+            if (r / opts.radius_step - (r / opts.radius_step).round()).abs() > 1e-6 {
+                graph.add_child(
+                    group,
+                    Mobject::new(geometry::circle(Point::ORIGIN, r * u))
+                        .with_style(faded_style.clone().no_fill()),
+                );
+            }
+        }
+    }
+    if opts.radius_step > 0.0 {
+        let n = (r_max / opts.radius_step).round() as i32;
+        for i in 1..=n {
+            let r = i as f64 * opts.radius_step;
+            graph.add_child(
+                group,
+                Mobject::new(geometry::circle(Point::ORIGIN, r * u))
+                    .with_style(grid_style.clone().no_fill()),
+            );
+        }
+    }
+    let n_az = opts.azimuth_divisions.max(2);
+    for i in 0..n_az {
+        let a = i as f64 / n_az as f64 * std::f64::consts::TAU;
+        let end = Point::new(a.cos() * r_max * u, a.sin() * r_max * u);
+        graph.add_child(
+            group,
+            Mobject::new(geometry::line(Point::ORIGIN, end))
+                .with_style(grid_style.clone().no_fill()),
+        );
+    }
+    graph.add_child(
+        group,
+        Mobject::new(geometry::line(
+            Point::new(-r_max * u, 0.0),
+            Point::new(r_max * u, 0.0),
+        ))
+        .with_style(axis_style.clone().no_fill()),
+    );
+    graph.add_child(
+        group,
+        Mobject::new(geometry::line(
+            Point::new(0.0, -r_max * u),
+            Point::new(0.0, r_max * u),
+        ))
+        .with_style(axis_style.no_fill()),
+    );
+    group
+}
+
+/// Filled rect behind `target` (Manim `BackgroundRectangle`).
+pub fn add_background_rect(
+    graph: &mut SceneGraph,
+    target: NodeId,
+    buff: f64,
+    fill: crate::peniko::Color,
+    opacity: f32,
+) -> NodeId {
+    let id = add_surrounding_rect(
+        graph,
+        target,
+        buff,
+        0.0,
+        Style::filled(fill).no_stroke().with_opacity(opacity),
+    );
+    graph.set_z_index(id, -1);
+    id
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -471,6 +636,25 @@ mod tests {
             Style::default().with_stroke(palette::white(), 3.0),
         );
         assert!(g.children_of(p).len() > 6);
+    }
+
+    #[test]
+    fn polar_plane_has_circles_and_radials() {
+        let mut g = SceneGraph::new();
+        let p = add_polar_plane(
+            &mut g,
+            &PolarPlaneOpts {
+                radius: 3.0,
+                radius_step: 1.0,
+                azimuth_divisions: 8,
+                faded_line_ratio: 1,
+                ..PolarPlaneOpts::default()
+            },
+            Style::default().with_stroke(palette::blue_d(), 2.0),
+            Style::default().with_stroke(palette::white(), 3.0),
+        );
+        // 3 circles + 8 radials + 2 axes
+        assert_eq!(g.children_of(p).len(), 13);
     }
 }
 

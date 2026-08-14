@@ -83,6 +83,30 @@ fn plot_samples_a_parabola() {
 }
 
 #[test]
+fn star_has_ten_vertices() {
+    let s = geometry::star(Point::ORIGIN, 5, 1.0, None, std::f64::consts::FRAC_PI_2);
+    let (pts, closed) = geometry::flatten_points(&s);
+    assert!(closed);
+    assert_eq!(pts.len(), 10);
+    let tip = pts
+        .iter()
+        .max_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
+        .unwrap();
+    assert!(tip.y > 0.9 && tip.x.abs() < 0.05, "{tip:?}");
+}
+
+#[test]
+fn arc_between_points_quarter_circle() {
+    let a = geometry::arc_between_points(Point::new(1.0, 0.0), Point::new(0.0, 1.0), PI / 2.0);
+    let len = geometry::path_length(&a);
+    assert!((len - PI / 2.0).abs() < 0.05, "len={len}");
+    let start = geometry::point_along(&a, 0.0);
+    let end = geometry::point_along(&a, 1.0);
+    assert!((start.x - 1.0).abs() < 0.02 && start.y.abs() < 0.02, "{start:?}");
+    assert!(end.x.abs() < 0.02 && (end.y - 1.0).abs() < 0.02, "{end:?}");
+}
+
+#[test]
 fn lerp_paths_endpoints_match() {
     let c = geometry::circle(Point::ORIGIN, 1.0);
     let s = geometry::square(Point::ORIGIN, 2.0);

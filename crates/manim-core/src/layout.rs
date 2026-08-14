@@ -159,14 +159,14 @@ impl SceneGraph {
 
     /// Move to a screen edge / corner (Manim `to_edge` / `align_on_border`).
     pub fn to_edge(&mut self, id: NodeId, direction: Vec2, buff: f64) {
-        let target = Point::new(
-            direction.x.signum() * FRAME_X_RADIUS,
-            direction.y.signum() * FRAME_Y_RADIUS,
-        );
+        // `f64::signum(0.0)` is +1, so a raw signum would treat UP as UR.
+        let axis = |v: f64| if v == 0.0 { 0.0 } else { v.signum() };
+        let (sx, sy) = (axis(direction.x), axis(direction.y));
+        let target = Point::new(sx * FRAME_X_RADIUS, sy * FRAME_Y_RADIUS);
         let mine = self.critical_point(id, direction);
         let mut delta = (target - mine) - direction * buff;
-        delta.x *= direction.x.signum().abs();
-        delta.y *= direction.y.signum().abs();
+        delta.x *= sx.abs();
+        delta.y *= sy.abs();
         self.shift(id, delta);
     }
 
@@ -302,7 +302,7 @@ impl SceneGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{DOWN, LEFT, RIGHT, UP};
+    use crate::constants::{DOWN, FRAME_Y_RADIUS, LEFT, RIGHT, UP};
     use crate::geometry;
     use crate::mobject::Mobject;
 
@@ -361,6 +361,17 @@ mod tests {
         let p = g.center_of(b);
         assert!((p.y - 2.5).abs() < 1e-6, "y={}", p.y);
         assert!(p.x.abs() < 1e-6, "align_to UP must not move x");
+    }
+
+    #[test]
+    fn to_edge_up_keeps_x() {
+        let mut g = SceneGraph::new();
+        let c = circle_at(&mut g, Point::ORIGIN, 0.5);
+        g.to_edge(c, UP, 0.5);
+        let p = g.center_of(c);
+        assert!(p.x.abs() < 1e-6, "to_edge UP must not move x, got {p:?}");
+        let top = g.critical_point(c, UP);
+        assert!((top.y - (FRAME_Y_RADIUS - 0.5)).abs() < 1e-6, "top.y={}", top.y);
     }
 
     #[test]
