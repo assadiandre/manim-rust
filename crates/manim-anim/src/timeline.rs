@@ -3,14 +3,28 @@
 
 use std::collections::HashMap;
 
-use manim_core::{Mobject, NodeId, SceneGraph};
+use manim_core::{Mobject, NodeId, OrthoCamera2D, SceneGraph};
+use manim_core::peniko::Color;
+use manim_core::{add_surrounding_rect, Style};
 
 use crate::animation::{Animation, Prop};
+use crate::easing::Easing;
+
+#[derive(Clone, Debug)]
+pub struct CameraAnim {
+    pub start: f64,
+    pub duration: f64,
+    pub easing: Easing,
+    pub from: OrthoCamera2D,
+    pub to: OrthoCamera2D,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Timeline {
     pub animations: Vec<Animation>,
     pub duration: f64,
+    pub camera_base: OrthoCamera2D,
+    pub camera_anims: Vec<CameraAnim>,
 }
 
 impl Timeline {
@@ -49,6 +63,32 @@ impl Timeline {
                 }
             }
         }
+    }
+
+    pub fn camera_at(&self, t: f64) -> OrthoCamera2D {
+        if self.camera_anims.is_empty() {
+            return self.camera_base.clone();
+        }
+        let chosen = self
+            .camera_anims
+            .iter()
+            .rev()
+            .find(|a| a.start <= t);
+        match chosen {
+            Some(a) => {
+                let alpha = a.easing.eval((t - a.start) / a.duration.max(1e-9));
+                lerp_camera(&a.from, &a.to, alpha)
+            }
+            None => self.camera_anims[0].from.clone(),
+        }
+    }
+}
+
+fn lerp_camera(from: &OrthoCamera2D, to: &OrthoCamera2D, t: f64) -> OrthoCamera2D {
+    let t = t.clamp(0.0, 1.0);
+    OrthoCamera2D {
+        center: from.center.lerp(to.center, t),
+        frame_height: from.frame_height + (to.frame_height - from.frame_height) * t,
     }
 }
 
@@ -141,6 +181,63 @@ impl Scene {
             .map(|id| Animation::uncreate(&self.graph, id, duration))
             .collect();
         self.play(anims);
+    }
+
+    pub fn play_draw_border_then_fill(&mut self, target: NodeId, duration: f64) {
+        let anims: Vec<_> = path_targets(&self.graph, target)
+            .into_iter()
+            .map(|id| Animation::draw_border_then_fill(&self.graph, id, duration))
+            .collect();
+        self.play(anims);
+    }
+
+    /// Create then uncreate a surrounding rectangle (Manim `Circumscribe`).
+    pub fn play_circumscribe(&mut self, target: NodeId, duration: f64, color: Color) {
+        let style = Style::default().no_fill().with_stroke(color, 4.0);
+        let rect = add_surrounding_rect(&mut self.graph, target, 0.15, 0.0, style);
+        let half = (duration * 0.5).max(1e-3);
+        self.play_create(rect, half);
+        self.play_uncreate(rect, half);
+    }
+
+    pub fn play_succession(&mut self, animations: impl IntoIterator<Item = Animation>) {
+        for a in animations {
+            self.play([a]);
+        }
+    }
+
+    fn current_camera(&self) -> OrthoCamera2D {
+        self.timeline
+            .camera_anims
+            .last()
+            .map(|a| a.to.clone())
+            .unwrap_or_else(|| self.timeline.camera_base.clone())
+    }
+
+    pub fn play_camera(&mut self, to: OrthoCamera2D, duration: f64) {
+        let from = self.current_camera();
+        self.timeline.camera_anims.push(CameraAnim {
+            start: self.now,
+            duration: duration.max(1e-9),
+            easing: Easing::default(),
+            from,
+            to,
+        });
+        self.now += duration;
+        self.timeline.duration = self.now;
+    }
+
+    pub fn play_camera_shift(&mut self, delta: kurbo::Vec2, duration: f64) {
+        let mut to = self.current_camera();
+        to.center = to.center + delta;
+        self.play_camera(to, duration);
+    }
+
+    /// Zoom in (`factor` > 1 shrinks the frame).
+    pub fn play_camera_zoom(&mut self, factor: f64, duration: f64) {
+        let mut to = self.current_camera();
+        to.frame_height /= factor.max(1e-6);
+        self.play_camera(to, duration);
     }
 
     pub fn duration(&self) -> f64 {
@@ -334,5 +431,61 @@ mod tests {
         scene.timeline.apply(&mut sim, 0.25);
         assert!((sim.get(a).style.opacity - 0.25).abs() < 1e-6);
         assert_eq!(sim.get(b).style.opacity, 0.0);
+    }
+
+    #[test]
+    fn recolor_lerps_fill() {
+        let mut scene = Scene::new();
+        let c = scene.add(
+            Mobject::new(geometry::circle(Point::ORIGIN, 1.0))
+                .with_style(manim_core::Style::filled(manim_core::palette::red())),
+        );
+        scene.play([
+            Animation::recolor(&scene.graph, c, manim_core::palette::blue(), 1.0)
+                .with_easing(Easing::Linear),
+        ]);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let a = sim.get(c).style.fill.unwrap().to_rgba8();
+        assert_eq!(a.r, 252);
+        scene.timeline.apply(&mut sim, 1.0);
+        let b = sim.get(c).style.fill.unwrap().to_rgba8();
+        assert_eq!(b.r, 88);
+    }
+
+    #[test]
+    fn wiggle_returns_home() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        scene.play([Animation::wiggle(&scene.graph, c, 1.0)]);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 1.0);
+        let p = sim.get(c).transform * Point::new(1.0, 0.0);
+        assert!((p.x - 1.0).abs() < 1e-6 && p.y.abs() < 1e-6);
+    }
+
+    #[test]
+    fn camera_zoom_shrinks_frame() {
+        let mut scene = Scene::new();
+        scene.play_camera_zoom(2.0, 1.0);
+        let mid = scene.timeline.camera_at(0.5);
+        let end = scene.timeline.camera_at(1.0);
+        assert!(mid.frame_height < 8.0 && mid.frame_height > 4.0);
+        assert!((end.frame_height - 4.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn draw_border_then_fill_hides_fill_first() {
+        let mut scene = Scene::new();
+        let c = scene.add(
+            Mobject::new(geometry::circle(Point::ORIGIN, 1.0))
+                .with_style(manim_core::Style::filled(manim_core::palette::red())),
+        );
+        scene.play_draw_border_then_fill(c, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.3);
+        assert!(sim.get(c).style.fill.is_none());
+        scene.timeline.apply(&mut sim, 1.0);
+        assert!(sim.get(c).style.fill.is_some());
     }
 }

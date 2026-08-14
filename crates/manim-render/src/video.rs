@@ -126,6 +126,7 @@ pub fn render_video(
     for f in 0..frames {
         let t = f as f64 / fps as f64;
         timeline.apply(&mut sim, t);
+        renderer.camera = timeline.camera_at(t);
         let px = renderer.render_frame(&mut sim)?;
         encoder.write_frame(px)?;
     }

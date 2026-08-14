@@ -56,6 +56,7 @@ pub struct Renderer {
     staging: wgpu::Buffer,
     padded_bytes_per_row: u32,
     last_frame: Option<Vec<u8>>,
+    last_camera: Option<OrthoCamera2D>,
 }
 
 impl Renderer {
@@ -102,6 +103,7 @@ impl Renderer {
             staging,
             padded_bytes_per_row,
             last_frame: None,
+            last_camera: None,
         })
     }
 
@@ -109,11 +111,13 @@ impl Renderer {
     /// Reuses the previous frame's pixels when nothing in the scene changed.
     pub fn render_frame(&mut self, scene: &mut SceneGraph) -> Result<&[u8], RenderError> {
         // Structured this way (single borrow at the end) to keep NLL happy.
-        let reuse = !scene.any_dirty() && self.last_frame.is_some();
+        let camera_changed = self.last_camera.as_ref() != Some(&self.camera);
+        let reuse = !scene.any_dirty() && !camera_changed && self.last_frame.is_some();
         if !reuse {
             let px = self.render_frame_gpu(scene)?;
             scene.clear_dirty();
             self.last_frame = Some(px);
+            self.last_camera = Some(self.camera.clone());
         }
         Ok(self.last_frame.as_deref().unwrap())
     }

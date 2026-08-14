@@ -6,6 +6,8 @@
 
 use kurbo::{Affine, BezPath, Point, Vec2};
 use manim_core::geometry;
+use manim_core::peniko::Color;
+use manim_core::style::lerp_color;
 use manim_core::{NodeId, SceneGraph};
 
 use crate::easing::Easing;
@@ -30,6 +32,26 @@ pub enum AnimationKind {
     Grow { from: Affine, about: Point },
     /// Path morph via common resampling.
     Morph { from: BezPath, to: BezPath },
+    /// Interpolate fill and/or stroke color (Manim `set_color` animate).
+    Recolor {
+        from_fill: Option<Color>,
+        to_fill: Option<Color>,
+        from_stroke: Option<Color>,
+        to_stroke: Option<Color>,
+    },
+    /// Stroke reveal, then fade the fill in (Manim `DrawBorderThenFill`).
+    DrawBorderThenFill {
+        full: BezPath,
+        fill: Option<Color>,
+        fill_opacity: f32,
+    },
+    /// Oscillating rotate that returns to rest (Manim `Wiggle`).
+    Wiggle {
+        from: Affine,
+        about: Point,
+        angle: f64,
+        wiggles: f64,
+    },
 }
 
 /// The scene property an animation drives. Animations are grouped by
@@ -41,6 +63,7 @@ pub enum Prop {
     Path,
     Opacity,
     Transform,
+    Color,
 }
 
 impl AnimationKind {
@@ -48,12 +71,15 @@ impl AnimationKind {
         match self {
             AnimationKind::Create { .. }
             | AnimationKind::Uncreate { .. }
-            | AnimationKind::Morph { .. } => Prop::Path,
+            | AnimationKind::Morph { .. }
+            | AnimationKind::DrawBorderThenFill { .. } => Prop::Path,
             AnimationKind::FadeIn { .. } | AnimationKind::FadeOut { .. } => Prop::Opacity,
             AnimationKind::Shift { .. }
             | AnimationKind::Scale { .. }
             | AnimationKind::Rotate { .. }
-            | AnimationKind::Grow { .. } => Prop::Transform,
+            | AnimationKind::Grow { .. }
+            | AnimationKind::Wiggle { .. } => Prop::Transform,
+            AnimationKind::Recolor { .. } => Prop::Color,
         }
     }
 }
@@ -136,6 +162,51 @@ impl Animation {
         Self::new(target, AnimationKind::Morph { from, to }, 0.0, duration)
     }
 
+    pub fn recolor(scene: &SceneGraph, target: NodeId, to: Color, duration: f64) -> Self {
+        let s = &scene.get(target).style;
+        Self::new(
+            target,
+            AnimationKind::Recolor {
+                from_fill: s.fill,
+                to_fill: s.fill.map(|_| to),
+                from_stroke: s.stroke,
+                to_stroke: s.stroke.map(|_| to),
+            },
+            0.0,
+            duration,
+        )
+    }
+
+    pub fn draw_border_then_fill(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        let m = scene.get(target);
+        Self::new(
+            target,
+            AnimationKind::DrawBorderThenFill {
+                full: m.path.clone(),
+                fill: m.style.fill,
+                fill_opacity: m.style.fill_opacity,
+            },
+            0.0,
+            duration,
+        )
+    }
+
+    pub fn wiggle(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        let from = scene.get(target).transform;
+        let about = scene.local_pivot(target);
+        Self::new(
+            target,
+            AnimationKind::Wiggle {
+                from,
+                about,
+                angle: 0.14,
+                wiggles: 2.0,
+            },
+            0.0,
+            duration,
+        )
+    }
+
     pub fn end(&self) -> f64 {
         self.start + self.duration
     }
@@ -189,6 +260,48 @@ impl Animation {
             AnimationKind::Morph { from, to } => {
                 scene.get_mut(self.target).path =
                     geometry::lerp_paths(from, to, MORPH_SAMPLES, alpha);
+            }
+            AnimationKind::Recolor {
+                from_fill,
+                to_fill,
+                from_stroke,
+                to_stroke,
+            } => {
+                let m = scene.get_mut(self.target);
+                if let (Some(a), Some(b)) = (from_fill, to_fill) {
+                    m.style.fill = Some(lerp_color(*a, *b, alpha as f32));
+                }
+                if let (Some(a), Some(b)) = (from_stroke, to_stroke) {
+                    m.style.stroke = Some(lerp_color(*a, *b, alpha as f32));
+                }
+            }
+            AnimationKind::DrawBorderThenFill {
+                full,
+                fill,
+                fill_opacity,
+            } => {
+                let border_end = 0.6;
+                let m = scene.get_mut(self.target);
+                if alpha < border_end {
+                    let t = alpha / border_end;
+                    m.path = geometry::trim(full, 0.0, t);
+                    m.style.fill = None;
+                } else {
+                    m.path = full.clone();
+                    m.style.fill = *fill;
+                    let t = (alpha - border_end) / (1.0 - border_end);
+                    m.style.fill_opacity = fill_opacity * t as f32;
+                }
+            }
+            AnimationKind::Wiggle {
+                from,
+                about,
+                angle,
+                wiggles,
+            } => {
+                let w = (wiggles * std::f64::consts::PI * alpha).sin() * (1.0 - alpha);
+                scene.get_mut(self.target).transform =
+                    *from * Affine::rotate_about(angle * w, *about);
             }
         }
     }

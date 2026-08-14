@@ -96,6 +96,7 @@ fn main() {
                 .expect("GPU init failed");
             let mut sim = scene.graph.clone();
             scene.timeline.apply(&mut sim, time);
+            renderer.camera = scene.timeline.camera_at(time);
             if let Some(dir) = out.parent() {
                 std::fs::create_dir_all(dir).ok();
             }
@@ -128,6 +129,7 @@ fn visual_check(out: &std::path::Path, width: u32, height: u32) {
         for &t in &probe.times {
             let mut sim = probe.scene.graph.clone();
             probe.scene.timeline.apply(&mut sim, t);
+            renderer.camera = probe.scene.timeline.camera_at(t);
             let file = format!("{}_t{:05.2}.png", probe.name, t);
             renderer
                 .save_png(&mut sim, &out.join(&file))

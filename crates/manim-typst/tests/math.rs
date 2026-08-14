@@ -1,5 +1,5 @@
 use manim_core::kurbo::Shape;
-use manim_typst::{math_mobjects, tex_mobjects, MathOptions};
+use manim_typst::{math_mobjects, tex_mobjects, text_mobjects, MathOptions};
 
 #[test]
 fn euler_identity_produces_glyph_paths() {
@@ -122,6 +122,16 @@ fn tex_and_typst_fractions_have_same_geometry() {
             (t - p).abs() < 1e-6,
             "bbox mismatch: tex {tex:?} vs typst {typ:?}"
         );
+    }
+}
+
+#[test]
+fn plain_text_produces_glyph_paths() {
+    let parts = text_mobjects("Hello", &MathOptions::default()).unwrap();
+    assert!(!parts.is_empty(), "expected glyph fragments");
+    for p in &parts {
+        assert!(!p.path.elements().is_empty());
+        assert!(p.style.fill.is_some(), "text glyphs should be filled");
     }
 }
 

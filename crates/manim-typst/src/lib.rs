@@ -399,6 +399,8 @@ enum Syntax {
     Typst,
     /// LaTeX math syntax, converted to typst via mitex.
     Latex,
+    /// Typst markup / plain text (not wrapped in `$...$`).
+    Text,
 }
 
 /// Compile a math expression into mobjects in logical units, centered at the
@@ -418,17 +420,25 @@ fn compile_mobjects(
     }
 
     let converted;
-    let (body, prelude) = match syntax {
-        Syntax::Typst => (source, ""),
+    let (body, prelude, math) = match syntax {
+        Syntax::Typst => (source, "", true),
+        Syntax::Text => (source, "", false),
         Syntax::Latex => {
             converted = mitex::convert_math(source, None).map_err(TypstError::TexConvert)?;
-            (converted.as_str(), MITEX_PRELUDE)
+            (converted.as_str(), MITEX_PRELUDE, true)
         }
     };
-    let markup = format!(
-        "#set page(width: auto, height: auto, margin: 0pt)\n#set text(size: {}pt)\n{prelude}$ {body} $",
-        options.font_size_pt,
-    );
+    let markup = if math {
+        format!(
+            "#set page(width: auto, height: auto, margin: 0pt)\n#set text(size: {}pt)\n{prelude}$ {body} $",
+            options.font_size_pt,
+        )
+    } else {
+        format!(
+            "#set page(width: auto, height: auto, margin: 0pt)\n#set text(size: {}pt)\n{body}",
+            options.font_size_pt,
+        )
+    };
     let world = MathWorld::new(&markup);
     let warned = typst::compile::<PagedDocument>(&world);
     let doc = warned.output.map_err(|diags| {
@@ -550,5 +560,19 @@ pub fn add_tex(
     options: &MathOptions,
 ) -> Result<manim_core::NodeId, TypstError> {
     let parts = tex_mobjects(source, options)?;
+    Ok(add_group(scene, parts, source))
+}
+
+/// Compile Typst markup / plain text (Manim `Text`) into a glyph group.
+pub fn text_mobjects(source: &str, options: &MathOptions) -> Result<Vec<Mobject>, TypstError> {
+    compile_mobjects(source, Syntax::Text, options)
+}
+
+pub fn add_text(
+    scene: &mut manim_core::SceneGraph,
+    source: &str,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let parts = text_mobjects(source, options)?;
     Ok(add_group(scene, parts, source))
 }
