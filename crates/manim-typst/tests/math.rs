@@ -185,10 +185,7 @@ fn markup_bold_compiles_glyphs() {
         &MathOptions::default(),
     )
     .unwrap();
-    assert!(
-        !g.path_leaves(id).is_empty(),
-        "expected markup glyphs"
-    );
+    assert!(!g.path_leaves(id).is_empty(), "expected markup glyphs");
 }
 
 #[test]
@@ -286,13 +283,8 @@ fn labeled_table_grows_for_headers() {
         Style::default(),
     )
     .unwrap();
-    let highlight = manim_typst::add_highlighted_cell(
-        &mut g,
-        id,
-        4,
-        manim_core::palette::yellow(),
-        0.45,
-    );
+    let highlight =
+        manim_typst::add_highlighted_cell(&mut g, id, 4, manim_core::palette::yellow(), 0.45);
     assert!(g.get(highlight).z_index < 0);
 }
 
@@ -460,4 +452,116 @@ fn complex_plane_labels_include_i() {
         "expected real ticks plus i/-i, got {}",
         g.children_of(id).len()
     );
+}
+
+#[test]
+fn split_double_braces_three_parts() {
+    use manim_typst::expand_tex_parts;
+    let parts = expand_tex_parts(&[r"{{a^2}} + {{b^2}}".into()]);
+    assert_eq!(
+        parts,
+        vec!["a^2".to_string(), " + ".to_string(), "b^2".to_string()]
+    );
+}
+
+#[test]
+fn tex_parts_two_summands_are_named() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_tex_parts;
+    let mut g = SceneGraph::new();
+    let id = add_tex_parts(
+        &mut g,
+        &["a^2".into(), "+".into(), "b^2".into()],
+        &MathOptions::default(),
+        true,
+    )
+    .unwrap();
+    let kids = g.children_of(id);
+    assert_eq!(kids.len(), 3);
+    for &child in kids {
+        let name = g.get(child).name.as_deref().unwrap_or("");
+        assert!(
+            name.starts_with("tex-part:"),
+            "expected tex-part: name, got {name:?}"
+        );
+    }
+}
+
+#[test]
+fn set_color_by_tex_recolors_match() {
+    use manim_core::peniko::Color;
+    use manim_core::SceneGraph;
+    use manim_typst::{add_tex_parts, part_by_tex, set_color_by_tex};
+    let mut g = SceneGraph::new();
+    let id = add_tex_parts(
+        &mut g,
+        &["a^2".into(), "+".into(), "b^2".into()],
+        &MathOptions::default(),
+        true,
+    )
+    .unwrap();
+    let red = Color::from_rgba8(255, 0, 0, 255);
+    assert_eq!(set_color_by_tex(&mut g, id, "a^2", red), 1);
+    let child = part_by_tex(&g, id, "a^2").expect("a^2 part");
+    let found = g.path_leaves(child).iter().any(|&leaf| {
+        g.get(leaf)
+            .style
+            .fill
+            .map(|c| {
+                let rgba = c.to_rgba8();
+                (rgba.r, rgba.g, rgba.b, rgba.a) == (255, 0, 0, 255)
+            })
+            .unwrap_or(false)
+    });
+    assert!(found, "expected a red fill on the a^2 part or a descendant");
+}
+
+#[test]
+fn part_by_tex_finds_plus() {
+    use manim_core::SceneGraph;
+    use manim_typst::{add_tex_parts, part_by_tex};
+    let mut g = SceneGraph::new();
+    let id = add_tex_parts(
+        &mut g,
+        &["a^2".into(), "+".into(), "b^2".into()],
+        &MathOptions::default(),
+        true,
+    )
+    .unwrap();
+    assert!(part_by_tex(&g, id, "+").is_some());
+}
+
+#[test]
+fn single_part_is_named_tex_part() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_tex_parts;
+    let mut g = SceneGraph::new();
+    let id = add_tex_parts(&mut g, &["x".into()], &MathOptions::default(), true).unwrap();
+    assert_eq!(g.get(id).name.as_deref(), Some("tex-part:x"));
+}
+
+#[test]
+fn labeled_graph_has_vertex_labels() {
+    use manim_core::{SceneGraph, Style, palette};
+    use manim_typst::add_graph_labeled;
+    let mut g = SceneGraph::new();
+    let id = add_graph_labeled(
+        &mut g,
+        &["A".into(), "B".into(), "C".into()],
+        &[(0, 1), (1, 2), (2, 0)],
+        "circular",
+        2.0,
+        false,
+        0.16,
+        Style::filled(palette::blue()),
+        Style::default().with_stroke(palette::white(), 3.0),
+        true,
+        &MathOptions {
+            font_size_pt: 24.0,
+            ..MathOptions::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(g.get(id).name.as_deref(), Some("graph"));
+    assert_eq!(g.children_of(id).len(), 3, "edges + vertices + labels");
 }

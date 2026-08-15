@@ -357,6 +357,63 @@ impl Scene {
         self.play(anims);
     }
 
+    /// Pair `tex-part:` children by substring (Manim `TransformMatchingTex`).
+    /// Falls back to shape-hash matching when neither side has named parts.
+    pub fn transform_matching_tex_anims(
+        &mut self,
+        source: NodeId,
+        target: NodeId,
+        duration: f64,
+    ) -> Vec<Animation> {
+        let src = tex_part_children(&self.graph, source);
+        let dst = tex_part_children(&self.graph, target);
+        if src.is_empty() || dst.is_empty() {
+            return self.transform_matching_anims(source, target, duration);
+        }
+        match_named_parts(&mut self.graph, &src, &dst, duration)
+    }
+
+    pub fn play_transform_matching_tex(
+        &mut self,
+        source: NodeId,
+        target: NodeId,
+        duration: f64,
+    ) {
+        let anims = self.transform_matching_tex_anims(source, target, duration);
+        self.play(anims);
+    }
+
+    /// Fade in children one after another (Manim `ShowIncreasingSubsets`).
+    pub fn play_show_increasing_subsets(&mut self, target: NodeId, duration: f64) {
+        let kids = subset_targets(&self.graph, target);
+        let n = kids.len();
+        let lag = 0.5;
+        let each = duration / (1.0 + (n.saturating_sub(1) as f64) * lag);
+        let anims: Vec<_> = kids
+            .iter()
+            .map(|&id| Animation::fade_in(&self.graph, id, each))
+            .collect();
+        self.play_lagged(anims, lag);
+    }
+
+    /// Each mobject travels to the next one's center; last wraps to first
+    /// (Manim `CyclicReplace`).
+    pub fn play_cyclic_replace(&mut self, ids: &[NodeId], duration: f64) {
+        if ids.len() < 2 {
+            return;
+        }
+        let centers: Vec<_> = ids.iter().map(|&id| self.graph.center_of(id)).collect();
+        let anims: Vec<_> = ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| {
+                let dest = centers[(i + 1) % centers.len()];
+                Animation::shift(&self.graph, id, dest - centers[i], duration)
+            })
+            .collect();
+        self.play(anims);
+    }
+
     /// Source fades out while traveling toward the target; the target fades
     /// in while traveling from the source (Manim `FadeTransform`).
     ///
@@ -471,6 +528,99 @@ fn match_leaves_by_shape(
         extra_dst.extend(d.into_iter().skip(n));
     }
     (pairs, extra_src, extra_dst)
+}
+
+fn tex_part_key(name: &str) -> Option<&str> {
+    name.strip_prefix("tex-part:")
+}
+
+fn tex_part_children(graph: &SceneGraph, id: NodeId) -> Vec<(String, NodeId)> {
+    let mut out = Vec::new();
+    if let Some(name) = graph.get(id).name.as_deref() {
+        if let Some(key) = tex_part_key(name) {
+            out.push((key.to_string(), id));
+            return out;
+        }
+    }
+    for &c in graph.children_of(id) {
+        if let Some(name) = graph.get(c).name.as_deref() {
+            if let Some(key) = tex_part_key(name) {
+                out.push((key.to_string(), c));
+            }
+        }
+    }
+    out
+}
+
+fn match_named_parts(
+    graph: &mut SceneGraph,
+    src: &[(String, NodeId)],
+    dst: &[(String, NodeId)],
+    duration: f64,
+) -> Vec<Animation> {
+    let mut src_by: HashMap<String, Vec<NodeId>> = HashMap::new();
+    let mut dst_by: HashMap<String, Vec<NodeId>> = HashMap::new();
+    for (k, id) in src {
+        src_by.entry(k.clone()).or_default().push(*id);
+    }
+    for (k, id) in dst {
+        dst_by.entry(k.clone()).or_default().push(*id);
+    }
+    let mut pairs = Vec::new();
+    let mut extra_src = Vec::new();
+    let mut extra_dst = Vec::new();
+    let mut keys: Vec<String> = src_by.keys().cloned().collect();
+    for k in dst_by.keys() {
+        if !src_by.contains_key(k) {
+            keys.push(k.clone());
+        }
+    }
+    for key in keys {
+        let mut s = src_by.remove(&key).unwrap_or_default();
+        let mut d = dst_by.remove(&key).unwrap_or_default();
+        s.sort_by(|a, b| {
+            graph
+                .center_of(*a)
+                .x
+                .partial_cmp(&graph.center_of(*b).x)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        d.sort_by(|a, b| {
+            graph
+                .center_of(*a)
+                .x
+                .partial_cmp(&graph.center_of(*b).x)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let n = s.len().min(d.len());
+        for i in 0..n {
+            pairs.push((s[i], d[i]));
+        }
+        extra_src.extend(s.into_iter().skip(n));
+        extra_dst.extend(d.into_iter().skip(n));
+    }
+    let mut anims = Vec::new();
+    for (s, d) in pairs {
+        let delta = graph.center_of(d) - graph.center_of(s);
+        anims.push(Animation::shift(graph, s, delta, duration));
+        graph.get_mut(d).style.opacity = 0.0;
+    }
+    for s in extra_src {
+        anims.push(Animation::fade_out(graph, s, duration));
+    }
+    for d in extra_dst {
+        anims.push(Animation::fade_in(graph, d, duration));
+    }
+    anims
+}
+
+fn subset_targets(graph: &SceneGraph, target: NodeId) -> Vec<NodeId> {
+    let kids = graph.children_of(target);
+    if kids.is_empty() {
+        path_targets(graph, target)
+    } else {
+        kids.to_vec()
+    }
 }
 
 /// Leaves to animate for Create/Write/Uncreate. Falls back to `target` itself
@@ -924,5 +1074,63 @@ mod tests {
             "{p:?} dest={dest_c:?}"
         );
         assert_eq!(sim.get(far_circle).style.opacity, 0.0);
+    }
+
+    #[test]
+    fn transform_matching_tex_pairs_by_name() {
+        let mut scene = Scene::new();
+        let src_a = scene.add(
+            Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.3)).named("tex-part:a"),
+        );
+        let src_b = scene.add(
+            Mobject::new(geometry::square(Point::new(-1.0, 0.0), 0.4)).named("tex-part:b"),
+        );
+        let src = scene.graph.group_nodes(&[src_a, src_b]);
+        let dst_a = scene.add(
+            Mobject::new(geometry::circle(Point::new(2.0, 1.0), 0.3)).named("tex-part:a"),
+        );
+        let dst_b = scene.add(
+            Mobject::new(geometry::square(Point::new(1.0, -1.0), 0.4)).named("tex-part:b"),
+        );
+        let dst = scene.graph.group_nodes(&[dst_a, dst_b]);
+        let dest_a = scene.graph.center_of(dst_a);
+        scene.play_transform_matching_tex(src, dst, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 1.0);
+        let p = sim.center_of(src_a);
+        assert!(
+            (p.x - dest_a.x).abs() < 0.1 && (p.y - dest_a.y).abs() < 0.1,
+            "{p:?} dest={dest_a:?}"
+        );
+        assert_eq!(sim.get(dst_a).style.opacity, 0.0);
+    }
+
+    #[test]
+    fn show_increasing_subsets_staggers_children() {
+        let mut scene = Scene::new();
+        let a = scene.add(Mobject::new(geometry::circle(Point::new(-1.0, 0.0), 0.3)));
+        let b = scene.add(Mobject::new(geometry::circle(Point::new(1.0, 0.0), 0.3)));
+        let g = scene.graph.group_nodes(&[a, b]);
+        scene.play_show_increasing_subsets(g, 1.5);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.25);
+        assert!(sim.get(a).style.opacity > 0.0);
+        assert_eq!(sim.get(b).style.opacity, 0.0);
+    }
+
+    #[test]
+    fn cyclic_replace_rotates_centers() {
+        let mut scene = Scene::new();
+        let a = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.3)));
+        let b = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.3)));
+        let a0 = scene.graph.center_of(a);
+        let b0 = scene.graph.center_of(b);
+        scene.play_cyclic_replace(&[a, b], 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 1.0);
+        let a1 = sim.center_of(a);
+        let b1 = sim.center_of(b);
+        assert!((a1.x - b0.x).abs() < 0.05 && (a1.y - b0.y).abs() < 0.05);
+        assert!((b1.x - a0.x).abs() < 0.05 && (b1.y - a0.y).abs() < 0.05);
     }
 }

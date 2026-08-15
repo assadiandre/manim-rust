@@ -236,6 +236,15 @@ impl SceneGraph {
             self.set_color(c, color);
         }
     }
+
+    /// Set opacity on this node and descendants (Manim `set_opacity`).
+    pub fn set_opacity(&mut self, id: NodeId, opacity: f32) {
+        let kids: Vec<NodeId> = self.children_of(id).to_vec();
+        self.get_mut(id).style.opacity = opacity;
+        for c in kids {
+            self.set_opacity(c, opacity);
+        }
+    }
 }
 
 #[cfg(test)]

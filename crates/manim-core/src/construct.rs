@@ -3,9 +3,9 @@
 //! These build scene-graph groups (arrow = shaft + tip, number line = line +
 //! ticks) so Create/Write can animate the parts independently.
 
-use kurbo::{Affine, Point};
+use kurbo::{Affine, Point, Vec2};
 
-use crate::constants::{DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DOT_RADIUS};
+use crate::constants::{DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DOT_RADIUS, PI, TAU};
 use crate::geometry;
 use crate::mobject::Mobject;
 use crate::scene::{NodeId, SceneGraph};
@@ -939,6 +939,263 @@ pub fn add_bar_chart(
     group
 }
 
+/// Compute vertex positions. `layout` is "circular" | "spring" | "tree" | anything else → circular.
+/// `n` is vertex count. `edges` are undirected index pairs (0..n).
+/// `scale` is the radius / half-extent (default callers pass 2.5).
+pub fn layout_graph(
+    n: usize,
+    edges: &[(usize, usize)],
+    layout: &str,
+    scale: f64,
+) -> Vec<kurbo::Point> {
+    match layout {
+        "spring" => layout_spring(n, edges, scale),
+        "tree" => layout_tree(n, edges, scale),
+        _ => layout_circular(n, scale),
+    }
+}
+
+fn layout_circular(n: usize, scale: f64) -> Vec<Point> {
+    if n == 0 {
+        return Vec::new();
+    }
+    if n == 1 {
+        return vec![Point::ORIGIN];
+    }
+    (0..n)
+        .map(|i| {
+            let theta = TAU * i as f64 / n as f64 + PI / 2.0;
+            Point::new(scale * theta.cos(), scale * theta.sin())
+        })
+        .collect()
+}
+
+fn layout_spring(n: usize, edges: &[(usize, usize)], scale: f64) -> Vec<Point> {
+    if n == 0 {
+        return Vec::new();
+    }
+    if n == 1 {
+        return vec![Point::ORIGIN];
+    }
+    let mut pos = layout_circular(n, 1.0);
+    let k = 1.0;
+    let iters = 40;
+    for iter in 0..iters {
+        let mut disp = vec![Vec2::ZERO; n];
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let d = pos[i] - pos[j];
+                let dist = d.hypot().max(1e-6);
+                let force = (k * k) / dist;
+                let dir = d / dist;
+                disp[i] += dir * force;
+                disp[j] -= dir * force;
+            }
+        }
+        for &(a, b) in edges {
+            if a >= n || b >= n || a == b {
+                continue;
+            }
+            let d = pos[a] - pos[b];
+            let dist = d.hypot().max(1e-6);
+            let force = (dist * dist) / k;
+            let dir = d / dist;
+            disp[a] -= dir * force;
+            disp[b] += dir * force;
+        }
+        let temp = 0.5 * (1.0 - iter as f64 / iters as f64);
+        for i in 0..n {
+            let len = disp[i].hypot();
+            if len > 1e-12 {
+                let step = temp.min(len);
+                pos[i] = pos[i] + disp[i] * (step / len);
+            }
+        }
+    }
+    let mut cx = 0.0;
+    let mut cy = 0.0;
+    for p in &pos {
+        cx += p.x;
+        cy += p.y;
+    }
+    let inv = 1.0 / n as f64;
+    cx *= inv;
+    cy *= inv;
+    let mut max_d: f64 = 0.0;
+    for p in &mut pos {
+        *p = Point::new(p.x - cx, p.y - cy);
+        max_d = max_d.max(p.x.hypot(p.y));
+    }
+    if max_d > 1e-12 {
+        let s = scale / max_d;
+        for p in &mut pos {
+            *p = Point::new(p.x * s, p.y * s);
+        }
+    }
+    pos
+}
+
+fn layout_tree(n: usize, edges: &[(usize, usize)], scale: f64) -> Vec<Point> {
+    if n == 0 {
+        return Vec::new();
+    }
+    if n == 1 {
+        return vec![Point::ORIGIN];
+    }
+    let mut adj = vec![Vec::new(); n];
+    for &(a, b) in edges {
+        if a < n && b < n && a != b {
+            adj[a].push(b);
+            adj[b].push(a);
+        }
+    }
+    let mut layer_of = vec![None; n];
+    let mut next_layer = 0usize;
+    for seed in 0..n {
+        if layer_of[seed].is_some() {
+            continue;
+        }
+        let mut queue = std::collections::VecDeque::new();
+        layer_of[seed] = Some(next_layer);
+        queue.push_back(seed);
+        let mut max_l = next_layer;
+        while let Some(u) = queue.pop_front() {
+            let lu = layer_of[u].unwrap();
+            for &v in &adj[u] {
+                if layer_of[v].is_none() {
+                    let lv = lu + 1;
+                    layer_of[v] = Some(lv);
+                    max_l = max_l.max(lv);
+                    queue.push_back(v);
+                }
+            }
+        }
+        next_layer = max_l + 1;
+    }
+    let depth = layer_of.iter().filter_map(|l| *l).max().unwrap_or(0);
+    let mut layers = vec![Vec::new(); depth + 1];
+    for i in 0..n {
+        layers[layer_of[i].unwrap()].push(i);
+    }
+    let dy = 2.0 * scale / (depth.max(1) as f64);
+    let mut pos = vec![Point::ORIGIN; n];
+    for (k, layer) in layers.iter().enumerate() {
+        if layer.is_empty() {
+            continue;
+        }
+        let y = scale - k as f64 * dy;
+        let m = layer.len();
+        for (j, &v) in layer.iter().enumerate() {
+            let x = if m == 1 {
+                0.0
+            } else {
+                -scale + j as f64 * (2.0 * scale / (m - 1) as f64)
+            };
+            pos[v] = Point::new(x, y);
+        }
+    }
+    pos
+}
+
+/// Baked network graph (Manim `Graph` geometry).
+///
+/// Group named `"graph"` with two children:
+/// - `"edges"` group: one line (or arrow if `directed`) per edge
+/// - `"vertices"` group: one filled circle per vertex, in vertex order
+///
+/// `positions.len()` is the vertex count. Ignore edges whose indices are out of range.
+/// `vertex_radius` <= 0 → use DEFAULT_DOT_RADIUS.
+pub fn add_graph(
+    graph: &mut SceneGraph,
+    positions: &[kurbo::Point],
+    edges: &[(usize, usize)],
+    directed: bool,
+    vertex_radius: f64,
+    vertex_style: Style,
+    edge_style: Style,
+) -> NodeId {
+    let group = graph.add(Mobject::group().named("graph"));
+    let r = if vertex_radius <= 0.0 {
+        DEFAULT_DOT_RADIUS
+    } else {
+        vertex_radius
+    };
+    let n = positions.len();
+
+    let edges_g = graph.add(Mobject::group().named("edges"));
+    for &(i, j) in edges {
+        if i >= n || j >= n {
+            continue;
+        }
+        let a = positions[i];
+        let b = positions[j];
+        if directed {
+            let arrow = add_arrow(graph, a, b, r + 0.02, 0.0, edge_style.clone());
+            graph.reparent(arrow, Some(edges_g));
+        } else {
+            graph.add_child(
+                edges_g,
+                Mobject::new(geometry::line(a, b)).with_style(edge_style.clone()),
+            );
+        }
+    }
+    graph.reparent(edges_g, Some(group));
+
+    let vertices = graph.add(Mobject::group().named("vertices"));
+    for (i, &pos) in positions.iter().enumerate() {
+        graph.add_child(
+            vertices,
+            Mobject::new(geometry::circle(pos, r))
+                .with_style(vertex_style.clone())
+                .named(format!("vertex:{i}")),
+        );
+    }
+    graph.reparent(vertices, Some(group));
+    group
+}
+
+/// Line of length `length` tangent to a baked plot at path-local `x`.
+/// Slope from points at x-0.02 and x+0.02 via `plot_point_at_x`.
+/// Named `"tangent_line"`.
+pub fn add_tangent_line(
+    graph: &mut SceneGraph,
+    plot_id: NodeId,
+    x: f64,
+    length: f64,
+    style: Style,
+) -> NodeId {
+    let p = plot_point_at_x(graph, plot_id, x);
+    let a = plot_point_at_x(graph, plot_id, x - 0.02);
+    let b = plot_point_at_x(graph, plot_id, x + 0.02);
+    let mut d = b - a;
+    let len = d.hypot();
+    if len < 1e-9 {
+        d = Vec2::new(1.0, 0.0);
+    } else {
+        d = d / len;
+    }
+    let half = length.max(0.1) * 0.5;
+    let path = geometry::line(p - d * half, p + d * half);
+    graph.add(Mobject::new(path).with_style(style).named("tangent_line"))
+}
+
+/// Vertical segment from `(px, y0)` to the plot point at `x`.
+/// `y0` is the axis baseline (usually 0.0). Named `"vline_to_graph"`.
+pub fn add_vertical_line_to_graph(
+    graph: &mut SceneGraph,
+    plot_id: NodeId,
+    x: f64,
+    y0: f64,
+    style: Style,
+) -> NodeId {
+    let p = plot_point_at_x(graph, plot_id, x);
+    graph.add(
+        Mobject::new(geometry::line(Point::new(p.x, y0), p))
+            .with_style(style)
+            .named("vline_to_graph"),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1173,5 +1430,80 @@ mod tests {
             (p.x - 3.0).abs() < 1e-9 && (p.y - 1.5).abs() < 1e-9,
             "{p:?}"
         );
+    }
+
+    #[test]
+    fn circular_graph_has_n_vertices_and_m_edges() {
+        let mut g = SceneGraph::new();
+        let edges = [(0, 1), (1, 2), (2, 3), (3, 0)];
+        let pos = layout_graph(4, &edges, "circular", 2.5);
+        let id = add_graph(
+            &mut g,
+            &pos,
+            &edges,
+            false,
+            0.1,
+            Style::filled(palette::blue()),
+            Style::default().with_stroke(palette::white(), 2.0),
+        );
+        assert_eq!(g.get(id).name.as_deref(), Some("graph"));
+        let kids = g.children_of(id);
+        assert_eq!(kids.len(), 2);
+        assert_eq!(g.get(kids[0]).name.as_deref(), Some("edges"));
+        assert_eq!(g.get(kids[1]).name.as_deref(), Some("vertices"));
+        assert_eq!(g.children_of(kids[0]).len(), 4);
+        assert_eq!(g.children_of(kids[1]).len(), 4);
+    }
+
+    #[test]
+    fn directed_graph_edges_are_arrows() {
+        let mut g = SceneGraph::new();
+        let edges = [(0, 1)];
+        let pos = layout_graph(2, &edges, "circular", 2.5);
+        let id = add_graph(
+            &mut g,
+            &pos,
+            &edges,
+            true,
+            0.1,
+            Style::filled(palette::blue()),
+            Style::default(),
+        );
+        let kids = g.children_of(id);
+        let edges_g = kids
+            .iter()
+            .copied()
+            .find(|&c| g.get(c).name.as_deref() == Some("edges"))
+            .unwrap();
+        assert_eq!(g.children_of(edges_g).len(), 1);
+        let arrow = g.children_of(edges_g)[0];
+        assert_eq!(g.children_of(arrow).len(), 2);
+    }
+
+    #[test]
+    fn tree_layout_root_is_highest() {
+        let edges = [(0, 1), (0, 2)];
+        let pos = layout_graph(3, &edges, "tree", 2.5);
+        assert!(pos[0].y > pos[1].y);
+        assert!(pos[0].y > pos[2].y);
+    }
+
+    #[test]
+    fn tangent_line_is_named() {
+        let mut g = SceneGraph::new();
+        let plot = g.add(Mobject::new(geometry::plot(-2.0, 2.0, 17, 1.0, 1.0, |x| x)));
+        let id = add_tangent_line(&mut g, plot, 1.0, 2.0, Style::default());
+        assert_eq!(g.get(id).name.as_deref(), Some("tangent_line"));
+        assert!(g.bounding_box(id).width() > 1.0);
+    }
+
+    #[test]
+    fn vertical_line_to_graph_reaches_curve() {
+        let mut g = SceneGraph::new();
+        let plot = g.add(Mobject::new(geometry::plot(-2.0, 2.0, 17, 1.0, 1.0, |x| x)));
+        let id = add_vertical_line_to_graph(&mut g, plot, 1.0, 0.0, Style::default());
+        assert_eq!(g.get(id).name.as_deref(), Some("vline_to_graph"));
+        let bb = g.bounding_box(id);
+        assert!((bb.y1 - 1.0).abs() < 1e-6, "{bb:?}");
     }
 }

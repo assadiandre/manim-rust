@@ -123,4 +123,9 @@ crates/
 - M22 table row/col labels and highlighted cells; Triangle /
   ArcBetweenPoints / CurvedDoubleArrow / LabeledArrow; Unwrite, Blink,
   GrowArrow, and FocusOn as compiled timeline data.
+- M23 MathTex part splits (`{{...}}` / multi-string) with `set_color_by_tex`;
+  NetworkX-free `Graph` / `DiGraph` (circular / spring / tree layouts);
+  TangentLine / get_vertical_line_to_graph; ShowIncreasingSubsets and
+  CyclicReplace as compiled timeline data; TransformMatchingTex pairs
+  `tex-part:` children by substring.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

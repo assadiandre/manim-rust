@@ -19,8 +19,10 @@
 //!   units (1 unit = `PT_PER_UNIT` pt), centered on the content's bbox.
 
 mod markup;
+mod tex_parts;
 
 pub use markup::pango_to_typst;
+pub use tex_parts::{expand_tex_parts, split_double_brace_parts};
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
@@ -568,6 +570,110 @@ pub fn add_tex(
     Ok(add_group(scene, parts, source))
 }
 
+fn keep_tex_parts(parts: Vec<String>) -> Vec<String> {
+    if parts.iter().any(|p| !p.trim().is_empty()) {
+        parts.into_iter().filter(|p| !p.trim().is_empty()).collect()
+    } else {
+        vec![String::new()]
+    }
+}
+
+fn tex_part_source(name: &str) -> &str {
+    name.strip_prefix("tex-part:").unwrap_or(name)
+}
+
+fn node_matches_tex(scene: &manim_core::SceneGraph, id: manim_core::NodeId, tex: &str) -> bool {
+    scene
+        .get(id)
+        .name
+        .as_deref()
+        .is_some_and(|name| tex_part_source(name).contains(tex))
+}
+
+/// Compile each TeX/Typst part as its own group, name it `tex-part:{source}`,
+/// wrap in a parent group named `tex:{joined}`, arrange RIGHT with buff 0.08, center.
+///
+/// `latex == true` uses `add_tex` (mitex); false uses `add_math`.
+/// Single expanded part: just `add_tex`/`add_math` but ALSO set the group name
+/// to `tex-part:{source}` (in addition to existing `tex:{source}` — prefer
+/// setting name to `tex-part:{source}` so set_color_by_tex works on one-part
+/// formulas too).
+pub fn add_tex_parts(
+    scene: &mut manim_core::SceneGraph,
+    parts: &[String],
+    options: &MathOptions,
+    latex: bool,
+) -> Result<manim_core::NodeId, TypstError> {
+    let compiled = keep_tex_parts(expand_tex_parts(parts));
+
+    let add_one =
+        |scene: &mut manim_core::SceneGraph, p: &str| -> Result<manim_core::NodeId, TypstError> {
+            let id = if latex {
+                add_tex(scene, p, options)?
+            } else {
+                add_math(scene, p, options)?
+            };
+            scene.get_mut(id).name = Some(format!("tex-part:{p}"));
+            Ok(id)
+        };
+
+    if compiled.len() == 1 {
+        return add_one(scene, &compiled[0]);
+    }
+
+    let mut ids = Vec::with_capacity(compiled.len());
+    for p in &compiled {
+        ids.push(add_one(scene, p)?);
+    }
+    let group = scene.group_nodes(&ids);
+    scene.get_mut(group).name = Some(format!("tex:{}", compiled.join("")));
+    scene.arrange(group, manim_core::constants::RIGHT, 0.08, true);
+    Ok(group)
+}
+
+/// Recolor every direct child whose name is `tex-part:...` and whose tex
+/// substring contains `tex` (Manim substring match). Returns how many matched.
+pub fn set_color_by_tex(
+    scene: &mut manim_core::SceneGraph,
+    group: manim_core::NodeId,
+    tex: &str,
+    color: manim_core::peniko::Color,
+) -> usize {
+    let children: Vec<_> = scene.children_of(group).to_vec();
+    let mut n = 0;
+    for child in children {
+        if node_matches_tex(scene, child, tex) {
+            scene.set_color(child, color);
+            n += 1;
+        }
+    }
+    // One-part formulas return the part group itself (`tex-part:{source}`),
+    // so match the group when no child is a named part.
+    if n == 0
+        && scene.get(group).name.as_deref().is_some_and(|name| {
+            name.starts_with("tex-part:") && tex_part_source(name).contains(tex)
+        })
+    {
+        scene.set_color(group, color);
+        n = 1;
+    }
+    n
+}
+
+/// First matching direct child, or the group itself for a one-part formula.
+pub fn part_by_tex(
+    scene: &manim_core::SceneGraph,
+    group: manim_core::NodeId,
+    tex: &str,
+) -> Option<manim_core::NodeId> {
+    scene
+        .children_of(group)
+        .iter()
+        .copied()
+        .find(|&child| node_matches_tex(scene, child, tex))
+        .or_else(|| node_matches_tex(scene, group, tex).then_some(group))
+}
+
 /// Compile Typst markup / plain text (Manim `Text`) into a glyph group.
 pub fn text_mobjects(source: &str, options: &MathOptions) -> Result<Vec<Mobject>, TypstError> {
     compile_mobjects(source, Syntax::Text, options)
@@ -592,10 +698,7 @@ pub fn add_markup(
     let mut body = pango_to_typst(source);
     if let Some(c) = options.color {
         let r = c.to_rgba8();
-        body = format!(
-            "#set text(fill: rgb({}, {}, {}))\n{body}",
-            r.r, r.g, r.b
-        );
+        body = format!("#set text(fill: rgb({}, {}, {}))\n{body}", r.r, r.g, r.b);
     }
     let compile = MathOptions {
         font_size_pt: options.font_size_pt,
@@ -1182,6 +1285,49 @@ pub fn add_labeled_line(
     let group = scene.group_nodes(&[line, label]);
     scene.get_mut(group).name = Some("labeled_line".into());
     Ok(group)
+}
+
+/// Network graph plus optional vertex labels (Manim `Graph` with `labels=True`).
+pub fn add_graph_labeled(
+    scene: &mut manim_core::SceneGraph,
+    vertices: &[String],
+    edges: &[(usize, usize)],
+    layout: &str,
+    layout_scale: f64,
+    directed: bool,
+    vertex_radius: f64,
+    vertex_style: Style,
+    edge_style: Style,
+    labels: bool,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let pos = manim_core::layout_graph(vertices.len(), edges, layout, layout_scale);
+    let id = manim_core::add_graph(
+        scene,
+        &pos,
+        edges,
+        directed,
+        vertex_radius,
+        vertex_style,
+        edge_style,
+    );
+    if labels && !vertices.is_empty() {
+        let mut label_opts = options.clone();
+        if label_opts.font_size_pt > 28.0 {
+            label_opts.font_size_pt = 28.0;
+        }
+        let mut lids = Vec::with_capacity(vertices.len());
+        for (i, name) in vertices.iter().enumerate() {
+            let lid = add_text(scene, name, &label_opts)?;
+            scene.move_to(lid, pos[i]);
+            scene.set_z_index(lid, 1);
+            lids.push(lid);
+        }
+        let lg = scene.group_nodes(&lids);
+        scene.get_mut(lg).name = Some("vertex_labels".into());
+        scene.reparent(lg, Some(id));
+    }
+    Ok(id)
 }
 
 /// Arrow plus a math label at the midpoint (Manim `LabeledArrow`).
