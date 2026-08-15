@@ -28,12 +28,12 @@ pub use constants::{
 pub use construct::{
     add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes,
     add_background_rect, add_bar_chart, add_brace, add_complex_plane, add_cross, add_curved_arrow,
-    add_curved_double_arrow,
-    add_dashed_copy, add_dot, add_double_arrow, add_graph, add_number_line, add_number_plane,
-    add_polar_plane, add_riemann_rects, add_right_angle, add_surrounding_rect, add_tangent_line,
-    add_underline, add_vector, add_vertical_line_to_graph, axes_c2p, layout_graph,
-    number_line_n2p, number_line_tick_values, plane_n2p, plot_point_at_x, AxesOpts, NumberLineOpts,
-    NumberPlaneOpts, PolarPlaneOpts, RiemannSample,
+    add_curved_double_arrow, add_dashed_copy, add_dot, add_double_arrow, add_graph,
+    add_implicit_curve, add_number_line, add_number_plane, add_polar_plane, add_riemann_rects,
+    add_right_angle, add_surrounding_rect, add_tangent_line, add_underline, add_vector,
+    add_vertical_line_to_graph, axes_c2p, layout_graph, number_line_n2p, number_line_tick_values,
+    plane_n2p, plot_point_at_x, AxesOpts, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts,
+    RiemannSample,
 };
 pub use decimal::DigitAtlas;
 pub use mobject::Mobject;

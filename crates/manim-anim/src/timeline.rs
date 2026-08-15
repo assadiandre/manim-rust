@@ -417,23 +417,43 @@ impl Scene {
     /// Source fades out while traveling toward the target; the target fades
     /// in while traveling from the source (Manim `FadeTransform`).
     ///
-    /// The target is moved to the source center first so `Shift` snapshots
-    /// `from` at that position; `apply_final` restores the target at `dst`.
-    /// Stretch is omitted: `Shift` and `Scale` share `Prop::Transform`.
-    pub fn play_fade_transform(&mut self, source: NodeId, target: NodeId, duration: f64) {
+    /// Stretch uses a single `Travel` animation (shift+scale) so it does not
+    /// fight `Prop::Transform`. The target is moved to the source center and
+    /// scaled to the source extent first; `apply_final` restores dest size
+    /// and position.
+    pub fn fade_transform_anims(
+        &mut self,
+        source: NodeId,
+        target: NodeId,
+        duration: f64,
+    ) -> Vec<Animation> {
         let src_c = self.graph.center_of(source);
         let dst_c = self.graph.center_of(target);
         let delta = dst_c - src_c;
+        let src_e = node_extent(&self.graph, source);
+        let dst_e = node_extent(&self.graph, target);
+        let src_to_dst = dst_e / src_e;
+        let dst_to_src = src_e / dst_e;
 
         let fade_out = Animation::fade_out(&self.graph, source, duration);
-        let shift_src = Animation::shift(&self.graph, source, delta, duration);
+        let travel_src = Animation::travel(&self.graph, source, delta, src_to_dst, duration);
 
         self.graph.move_to(target, src_c);
+        self.graph.scale_about_center(target, dst_to_src);
 
         let fade_in = Animation::fade_in(&self.graph, target, duration);
-        let shift_dst = Animation::shift(&self.graph, target, delta, duration);
+        let travel_dst = Animation::travel(&self.graph, target, delta, src_to_dst, duration);
+        vec![fade_out, travel_src, fade_in, travel_dst]
+    }
 
-        self.play([fade_out, shift_src, fade_in, shift_dst]);
+    pub fn play_fade_transform(&mut self, source: NodeId, target: NodeId, duration: f64) {
+        let anims = self.fade_transform_anims(source, target, duration);
+        self.play(anims);
+    }
+
+    /// Standing wave along the path (Manim `ApplyWave`).
+    pub fn play_apply_wave(&mut self, target: NodeId, duration: f64) {
+        self.play([Animation::apply_wave(&self.graph, target, 0.25, 2.0, duration)]);
     }
 
     pub fn duration(&self) -> f64 {
@@ -612,6 +632,11 @@ fn match_named_parts(
         anims.push(Animation::fade_in(graph, d, duration));
     }
     anims
+}
+
+fn node_extent(graph: &SceneGraph, id: NodeId) -> f64 {
+    let b = graph.bounding_box(id);
+    b.width().max(b.height()).max(1e-6)
 }
 
 fn subset_targets(graph: &SceneGraph, target: NodeId) -> Vec<NodeId> {
@@ -1132,5 +1157,68 @@ mod tests {
         let b1 = sim.center_of(b);
         assert!((a1.x - b0.x).abs() < 0.05 && (a1.y - b0.y).abs() < 0.05);
         assert!((b1.x - a0.x).abs() < 0.05 && (b1.y - a0.y).abs() < 0.05);
+    }
+
+    #[test]
+    fn fade_transform_stretches_small_toward_large() {
+        let mut scene = Scene::new();
+        let source = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.3)));
+        let target = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 1.0)));
+        let w0 = scene.graph.bounding_box(source).width();
+        let w_dst = scene.graph.bounding_box(target).width();
+        let src_c = scene.graph.center_of(source);
+        let dst_c = scene.graph.center_of(target);
+        scene.play_fade_transform(source, target, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let start = sim.bounding_box(source).width();
+        scene.timeline.apply(&mut sim, 0.5);
+        let mid = sim.bounding_box(source).width();
+        scene.timeline.apply(&mut sim, 1.0);
+        let end = sim.bounding_box(source).width();
+        let t1 = sim.center_of(target);
+        assert!((start - w0).abs() < 0.08, "start={start} w0={w0}");
+        assert!(mid > start + 0.15, "mid={mid} start={start}");
+        assert!((end - w_dst).abs() < 0.15, "end={end} dst={w_dst}");
+        assert!(
+            (t1.x - dst_c.x).abs() < 0.08 && (t1.y - dst_c.y).abs() < 0.08,
+            "target end {t1:?} dest {dst_c:?} (src was {src_c:?})"
+        );
+    }
+
+    #[test]
+    fn fade_transform_stretch_keeps_centers_together() {
+        let mut scene = Scene::new();
+        let source = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.3)));
+        let target = scene.add(Mobject::new(geometry::square(Point::new(2.0, 0.0), 2.0)));
+        scene.play_fade_transform(source, target, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.5);
+        let a = sim.center_of(source);
+        let b = sim.center_of(target);
+        assert!(
+            (a.x - b.x).abs() < 0.12 && (a.y - b.y).abs() < 0.12,
+            "mid source={a:?} target={b:?}"
+        );
+    }
+
+    #[test]
+    fn apply_wave_rests_at_endpoints() {
+        let mut scene = Scene::new();
+        let line = scene.add(Mobject::new(geometry::line(
+            Point::new(-2.0, 0.0),
+            Point::new(2.0, 0.0),
+        )));
+        scene.play_apply_wave(line, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let h0 = sim.bounding_box(line).height();
+        scene.timeline.apply(&mut sim, 0.5);
+        let h1 = sim.bounding_box(line).height();
+        scene.timeline.apply(&mut sim, 1.0);
+        let h2 = sim.bounding_box(line).height();
+        assert!(h0 < 0.05, "start height {h0}");
+        assert!(h1 > 0.2, "mid height {h1}");
+        assert!(h2 < 0.05, "end height {h2}");
     }
 }

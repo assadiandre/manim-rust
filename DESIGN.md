@@ -131,4 +131,7 @@ crates/
 - M24 SVGMobject via in-process `usvg` (paths only, no Typst SVG
   round-trip) and Union / Intersection / Difference / Exclusion as
   authoring-time `i_overlay` path ops.
+- M25 ImplicitFunction via marching squares (Python `f(x,y)` sampled once);
+  FadeTransform stretch as a single Travel (shift+scale) animation;
+  ApplyWave as compiled path data that rests at the endpoints.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

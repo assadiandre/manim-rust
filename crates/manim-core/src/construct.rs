@@ -524,6 +524,27 @@ pub fn add_complex_plane(
     id
 }
 
+/// Marching-squares isoline `f(x,y) = 0` (Manim `ImplicitFunction`).
+pub fn add_implicit_curve(
+    graph: &mut SceneGraph,
+    x_min: f64,
+    x_max: f64,
+    y_min: f64,
+    y_max: f64,
+    nx: usize,
+    ny: usize,
+    f: impl Fn(f64, f64) -> f64,
+    style: Style,
+) -> NodeId {
+    graph.add(
+        Mobject::new(geometry::implicit_curve(
+            x_min, x_max, y_min, y_max, nx, ny, f,
+        ))
+        .with_style(style)
+        .named("implicit"),
+    )
+}
+
 /// Filled region under `f` on `[x_min, x_max]`.
 pub fn add_area_under(
     graph: &mut SceneGraph,
@@ -898,7 +919,11 @@ pub fn add_bar_chart(
         palette::red(),
         palette::gold(),
     ];
-    let palette = if colors.is_empty() { &fallback[..] } else { colors };
+    let palette = if colors.is_empty() {
+        &fallback[..]
+    } else {
+        colors
+    };
     let zero_y = map_y(0.0f64.clamp(y_min.min(y_max), y_min.max(y_max)));
 
     let bars = graph.add(Mobject::group().named("bars"));
@@ -907,8 +932,8 @@ pub fn add_bar_chart(
         let y1 = map_y(v);
         let h = (y1 - zero_y).abs().max(1e-4);
         let cy = 0.5 * (zero_y + y1);
-        let mut style = Style::filled(palette[i % palette.len()])
-            .with_stroke(palette::white(), stroke_width);
+        let mut style =
+            Style::filled(palette[i % palette.len()]).with_stroke(palette::white(), stroke_width);
         style.fill_opacity = fill_opacity;
         graph.add_child(
             bars,
@@ -917,7 +942,9 @@ pub fn add_bar_chart(
     }
     graph.reparent(bars, Some(group));
 
-    let axis_style = Style::default().with_stroke(palette::white(), 3.0).no_fill();
+    let axis_style = Style::default()
+        .with_stroke(palette::white(), 3.0)
+        .no_fill();
     let axes = graph.add(Mobject::group().named("axes"));
     graph.add_child(
         axes,
@@ -1505,5 +1532,22 @@ mod tests {
         assert_eq!(g.get(id).name.as_deref(), Some("vline_to_graph"));
         let bb = g.bounding_box(id);
         assert!((bb.y1 - 1.0).abs() < 1e-6, "{bb:?}");
+    }
+
+    #[test]
+    fn add_implicit_curve_is_named() {
+        let mut g = SceneGraph::new();
+        let id = add_implicit_curve(
+            &mut g,
+            -1.5,
+            1.5,
+            -1.5,
+            1.5,
+            16,
+            16,
+            |x, y| x * x + y * y - 1.0,
+            Style::default(),
+        );
+        assert_eq!(g.get(id).name.as_deref(), Some("implicit"));
     }
 }

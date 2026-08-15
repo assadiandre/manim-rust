@@ -409,6 +409,125 @@ pub fn plot(
     polyline(&pts)
 }
 
+/// Marching-squares isoline `f(x,y) = 0` on a uniform grid.
+///
+/// `nx`/`ny` are cell counts (clamped to at least 2). Each cell with a
+/// sign change emits one or two line segments. Degenerate zeros on a
+/// corner count as negative (use a tiny epsilon) so edges don't vanish.
+pub fn implicit_curve(
+    x_min: f64,
+    x_max: f64,
+    y_min: f64,
+    y_max: f64,
+    nx: usize,
+    ny: usize,
+    f: impl Fn(f64, f64) -> f64,
+) -> BezPath {
+    const EPS: f64 = 1e-12;
+    let nx = nx.max(2);
+    let ny = ny.max(2);
+    let dx = (x_max - x_min) / nx as f64;
+    let dy = (y_max - y_min) / ny as f64;
+    let cols = nx + 1;
+    let rows = ny + 1;
+
+    let mut values = vec![0.0; rows * cols];
+    for j in 0..rows {
+        let y = y_min + j as f64 * dy;
+        for i in 0..cols {
+            let x = x_min + i as f64 * dx;
+            values[j * cols + i] = f(x, y);
+        }
+    }
+
+    let neg = |v: f64| v < EPS;
+    let crossing = |v0: f64, v1: f64, p0: Point, p1: Point| -> Point {
+        let denom = v1 - v0;
+        let t = if denom.abs() < EPS {
+            0.5
+        } else {
+            (-v0 / denom).clamp(0.0, 1.0)
+        };
+        p0.lerp(p1, t)
+    };
+
+    let mut path = BezPath::new();
+    let mut emit = |a: Point, b: Point| {
+        path.move_to(a);
+        path.line_to(b);
+    };
+
+    for j in 0..ny {
+        let y0 = y_min + j as f64 * dy;
+        let y1 = y0 + dy;
+        for i in 0..nx {
+            let x0 = x_min + i as f64 * dx;
+            let x1 = x0 + dx;
+            let sw = values[j * cols + i];
+            let se = values[j * cols + i + 1];
+            let ne = values[(j + 1) * cols + i + 1];
+            let nw = values[(j + 1) * cols + i];
+
+            let mut case = 0u8;
+            if neg(sw) {
+                case |= 1;
+            }
+            if neg(se) {
+                case |= 2;
+            }
+            if neg(ne) {
+                case |= 4;
+            }
+            if neg(nw) {
+                case |= 8;
+            }
+            if case == 0 || case == 15 {
+                continue;
+            }
+
+            let p_sw = Point::new(x0, y0);
+            let p_se = Point::new(x1, y0);
+            let p_ne = Point::new(x1, y1);
+            let p_nw = Point::new(x0, y1);
+            let south = crossing(sw, se, p_sw, p_se);
+            let east = crossing(se, ne, p_se, p_ne);
+            let north = crossing(nw, ne, p_nw, p_ne);
+            let west = crossing(sw, nw, p_sw, p_nw);
+
+            match case {
+                1 | 14 => emit(west, south),
+                2 | 13 => emit(south, east),
+                3 | 12 => emit(west, east),
+                4 | 11 => emit(east, north),
+                6 | 9 => emit(south, north),
+                7 | 8 => emit(west, north),
+                5 => {
+                    // SW+NE saddle: average of the four corners picks the pairing.
+                    if (sw + se + ne + nw) * 0.25 < EPS {
+                        emit(west, north);
+                        emit(south, east);
+                    } else {
+                        emit(west, south);
+                        emit(east, north);
+                    }
+                }
+                10 => {
+                    // SE+NW saddle.
+                    if (sw + se + ne + nw) * 0.25 < EPS {
+                        emit(west, south);
+                        emit(east, north);
+                    } else {
+                        emit(west, north);
+                        emit(south, east);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    path
+}
+
 /// Region under `f` on `[x_min, x_max]`, closed down to the x-axis.
 /// Negative `f` is included (signed area).
 pub fn area_under(
@@ -611,4 +730,37 @@ pub fn bounding_box(path: &BezPath) -> Rect {
 /// Centroid of the bounding box — the pivot Manim uses for scale/rotate.
 pub fn center(path: &BezPath) -> Point {
     bounding_box(path).center()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unit_circle_implicit_is_closedish() {
+        let path = implicit_curve(-1.5, 1.5, -1.5, 1.5, 40, 40, |x, y| x * x + y * y - 1.0);
+        let len = path_length(&path);
+        assert!(
+            (4.5..8.0).contains(&len),
+            "unit circle path length {len} not in 4.5..8.0"
+        );
+        let bb = bounding_box(&path);
+        assert!(
+            bb.x0 < -0.9 && bb.x1 > 0.9 && bb.y0 < -0.9 && bb.y1 > 0.9,
+            "bbox should cover roughly [-1, 1], got {bb:?}"
+        );
+        assert!(
+            bb.x0 > -1.2 && bb.x1 < 1.2 && bb.y0 > -1.2 && bb.y1 < 1.2,
+            "bbox should stay near the unit circle, got {bb:?}"
+        );
+    }
+
+    #[test]
+    fn empty_field_is_empty_path() {
+        let path = implicit_curve(-1.0, 1.0, -1.0, 1.0, 8, 8, |_, _| 1.0);
+        assert!(
+            path.is_empty(),
+            "constant-positive field should emit no segments"
+        );
+    }
 }

@@ -74,6 +74,20 @@ pub enum AnimationKind {
         places: usize,
         atlas: DigitAtlas,
     },
+    /// Translate and scale in one transform (Manim `FadeTransform` stretch).
+    /// `Shift` and `Scale` cannot run together — they share `Prop::Transform`.
+    Travel {
+        from: Affine,
+        delta: Vec2,
+        about: Point,
+        scale: f64,
+    },
+    /// Standing wave along the path that rests at the endpoints (Manim `ApplyWave`).
+    ApplyWave {
+        full: BezPath,
+        amplitude: f64,
+        ripples: f64,
+    },
 }
 
 /// The scene property an animation drives. Animations are grouped by
@@ -96,7 +110,8 @@ impl AnimationKind {
             | AnimationKind::Morph { .. }
             | AnimationKind::DrawBorderThenFill { .. }
             | AnimationKind::ShowPassingFlash { .. }
-            | AnimationKind::ChangingDecimal { .. } => Prop::Path,
+            | AnimationKind::ChangingDecimal { .. }
+            | AnimationKind::ApplyWave { .. } => Prop::Path,
             AnimationKind::FadeIn { .. } | AnimationKind::FadeOut { .. } => Prop::Opacity,
             AnimationKind::Shift { .. }
             | AnimationKind::Scale { .. }
@@ -104,7 +119,8 @@ impl AnimationKind {
             | AnimationKind::Grow { .. }
             | AnimationKind::Wiggle { .. }
             | AnimationKind::MoveAlongPath { .. }
-            | AnimationKind::SpinIn { .. } => Prop::Transform,
+            | AnimationKind::SpinIn { .. }
+            | AnimationKind::Travel { .. } => Prop::Transform,
             AnimationKind::Recolor { .. } => Prop::Color,
         }
     }
@@ -325,6 +341,48 @@ impl Animation {
         )
     }
 
+    pub fn travel(
+        scene: &SceneGraph,
+        target: NodeId,
+        delta: Vec2,
+        scale: f64,
+        duration: f64,
+    ) -> Self {
+        let from = scene.get(target).transform;
+        let about = scene.local_pivot(target);
+        Self::new(
+            target,
+            AnimationKind::Travel {
+                from,
+                delta,
+                about,
+                scale,
+            },
+            0.0,
+            duration,
+        )
+    }
+
+    pub fn apply_wave(
+        scene: &SceneGraph,
+        target: NodeId,
+        amplitude: f64,
+        ripples: f64,
+        duration: f64,
+    ) -> Self {
+        let full = scene.get(target).path.clone();
+        Self::new(
+            target,
+            AnimationKind::ApplyWave {
+                full,
+                amplitude,
+                ripples,
+            },
+            0.0,
+            duration,
+        )
+    }
+
     pub fn wiggle(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
         let from = scene.get(target).transform;
         let about = scene.local_pivot(target);
@@ -465,6 +523,29 @@ impl Animation {
                 let v = from + (to - from) * alpha;
                 scene.get_mut(self.target).path = atlas.compose(v, *places);
             }
+            AnimationKind::Travel {
+                from,
+                delta,
+                about,
+                scale,
+            } => {
+                // World-space shift so a pre-scaled `from` (FadeTransform
+                // target) still travels the full center-to-center delta.
+                let f = 1.0 + (scale - 1.0) * alpha;
+                let scale_about = Affine::translate(about.to_vec2())
+                    * Affine::scale(f)
+                    * Affine::translate(-about.to_vec2());
+                scene.get_mut(self.target).transform =
+                    Affine::translate(*delta * alpha) * *from * scale_about;
+            }
+            AnimationKind::ApplyWave {
+                full,
+                amplitude,
+                ripples,
+            } => {
+                scene.get_mut(self.target).path =
+                    wave_path(full, *amplitude, *ripples, alpha);
+            }
         }
     }
 
@@ -479,4 +560,24 @@ impl Animation {
     pub(crate) fn apply_at_alpha(&self, scene: &mut SceneGraph, alpha: f64) {
         self.apply(scene, alpha);
     }
+}
+
+fn wave_path(full: &BezPath, amplitude: f64, ripples: f64, alpha: f64) -> BezPath {
+    let (pts, closed) = geometry::resample(full, 96);
+    if pts.len() < 2 {
+        return full.clone();
+    }
+    let env = (std::f64::consts::PI * alpha).sin();
+    let n = pts.len();
+    let denom = (n - 1) as f64;
+    let waved: Vec<Point> = pts
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let s = i as f64 / denom;
+            let o = amplitude * env * (std::f64::consts::TAU * ripples * s).sin();
+            Point::new(p.x, p.y + o)
+        })
+        .collect();
+    geometry::points_to_path(&waved, closed)
 }
