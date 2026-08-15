@@ -22,7 +22,10 @@ fn fraction_and_sqrt_have_shape_fragments() {
     let parts = math_mobjects("frac(a, b) + sqrt(x)", &MathOptions::default()).unwrap();
     assert!(parts.len() >= 7, "got {}", parts.len());
     let stroked = parts.iter().filter(|p| p.style.stroke.is_some()).count();
-    assert!(stroked >= 2, "expected vinculum + radical overline, got {stroked}");
+    assert!(
+        stroked >= 2,
+        "expected vinculum + radical overline, got {stroked}"
+    );
 }
 
 #[test]
@@ -163,8 +166,26 @@ fn tex_textcolor_applies_via_shim() {
     assert!(!parts.is_empty());
     for p in &parts {
         let c = p.style.fill.unwrap().to_rgba8();
-        assert_eq!((c.r, c.g, c.b), (0, 0, 255), "expected pure blue, got {c:?}");
+        assert_eq!(
+            (c.r, c.g, c.b),
+            (0, 0, 255),
+            "expected pure blue, got {c:?}"
+        );
     }
+}
+
+#[test]
+fn table_two_by_two_has_four_cells() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_table;
+    let mut g = SceneGraph::new();
+    let id = add_table(
+        &mut g,
+        &[vec!["a".into(), "b".into()], vec!["c".into(), "d".into()]],
+        &MathOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(g.children_of(id).len(), 4);
 }
 
 #[test]
@@ -199,15 +220,7 @@ fn number_line_labels_count() {
     use manim_core::SceneGraph;
     use manim_typst::add_number_line_labels;
     let mut g = SceneGraph::new();
-    let id = add_number_line_labels(
-        &mut g,
-        -2.0,
-        2.0,
-        1.0,
-        1.0,
-        false,
-        &MathOptions::default(),
-    )
-    .unwrap();
+    let id = add_number_line_labels(&mut g, -2.0, 2.0, 1.0, 1.0, false, &MathOptions::default())
+        .unwrap();
     assert_eq!(g.children_of(id).len(), 5);
 }

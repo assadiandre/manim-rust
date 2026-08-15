@@ -257,10 +257,12 @@ struct OutlineSink {
 
 impl ttf_parser::OutlineBuilder for OutlineSink {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.path.move_to((x as f64 * self.scale, -y as f64 * self.scale));
+        self.path
+            .move_to((x as f64 * self.scale, -y as f64 * self.scale));
     }
     fn line_to(&mut self, x: f32, y: f32) {
-        self.path.line_to((x as f64 * self.scale, -y as f64 * self.scale));
+        self.path
+            .line_to((x as f64 * self.scale, -y as f64 * self.scale));
     }
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
         self.path.quad_to(
@@ -328,23 +330,17 @@ fn walk_frame(frame: &Frame, transform: Affine, out: &mut Vec<Fragment>) {
                         p.line_to((to.x.to_pt(), to.y.to_pt()));
                         p
                     }
-                    Geometry::Rect(size) => {
-                        kurbo::Rect::from_origin_size(
-                            Point::ORIGIN,
-                            KSize::new(size.x.to_pt(), size.y.to_pt()),
-                        )
-                        .to_path(0.1)
-                    }
+                    Geometry::Rect(size) => kurbo::Rect::from_origin_size(
+                        Point::ORIGIN,
+                        KSize::new(size.x.to_pt(), size.y.to_pt()),
+                    )
+                    .to_path(0.1),
                     Geometry::Curve(curve) => {
                         let mut p = BezPath::new();
                         for item in &curve.0 {
                             match item {
-                                CurveItem::Move(p0) => {
-                                    p.move_to((p0.x.to_pt(), p0.y.to_pt()))
-                                }
-                                CurveItem::Line(p1) => {
-                                    p.line_to((p1.x.to_pt(), p1.y.to_pt()))
-                                }
+                                CurveItem::Move(p0) => p.move_to((p0.x.to_pt(), p0.y.to_pt())),
+                                CurveItem::Line(p1) => p.line_to((p1.x.to_pt(), p1.y.to_pt())),
                                 CurveItem::Cubic(c1, c2, p1) => p.curve_to(
                                     (c1.x.to_pt(), c1.y.to_pt()),
                                     (c2.x.to_pt(), c2.y.to_pt()),
@@ -359,9 +355,10 @@ fn walk_frame(frame: &Frame, transform: Affine, out: &mut Vec<Fragment>) {
                 out.push(Fragment {
                     path: at * path,
                     fill: shape.fill.as_ref().map(paint_to_color),
-                    stroke: shape.stroke.as_ref().map(|s| {
-                        (paint_to_color(&s.paint), s.thickness.to_pt())
-                    }),
+                    stroke: shape
+                        .stroke
+                        .as_ref()
+                        .map(|s| (paint_to_color(&s.paint), s.thickness.to_pt())),
                 });
             }
             // Images/links/tags: not relevant for math layout.
@@ -412,7 +409,11 @@ fn compile_mobjects(
     syntax: Syntax,
     options: &MathOptions,
 ) -> Result<Vec<Mobject>, TypstError> {
-    let key = (syntax as u8, source.to_owned(), options.font_size_pt.to_bits());
+    let key = (
+        syntax as u8,
+        source.to_owned(),
+        options.font_size_pt.to_bits(),
+    );
     static CACHE: LazyLock<Mutex<HashMap<(u8, String, u64), Vec<Mobject>>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
     if let Some(hit) = CACHE.lock().unwrap().get(&key) {
@@ -642,6 +643,35 @@ pub fn add_matrix(
         .collect::<Vec<_>>()
         .join("; ");
     add_math(scene, &format!("mat({body})"), options)
+}
+
+/// Text grid (Manim `Table`, static). Empty cells become a space.
+pub fn add_table(
+    scene: &mut manim_core::SceneGraph,
+    cells: &[Vec<String>],
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    if cells.is_empty() {
+        return Err(TypstError::Compile("empty table".into()));
+    }
+    let cols = cells.iter().map(|r| r.len()).max().unwrap_or(0);
+    if cols == 0 {
+        return Err(TypstError::Compile("empty table".into()));
+    }
+    let rows = cells.len();
+    let mut ids = Vec::with_capacity(rows * cols);
+    for row in cells {
+        for c in 0..cols {
+            let text = row.get(c).map(String::as_str).unwrap_or("");
+            let text = if text.is_empty() { " " } else { text };
+            ids.push(add_text(scene, text, options)?);
+        }
+    }
+    let group = scene.group_nodes(&ids);
+    scene.get_mut(group).name = Some("table".into());
+    let buff = manim_core::constants::DEFAULT_MOBJECT_TO_MOBJECT_BUFFER;
+    scene.arrange_in_grid(group, Some(rows), Some(cols), buff, buff, true);
+    Ok(group)
 }
 
 fn escape_typst_string(s: &str) -> String {

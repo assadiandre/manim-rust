@@ -13,7 +13,11 @@ use crate::style::{lerp_color, palette, Style};
 
 /// Filled dot (Manim `Dot`).
 pub fn add_dot(graph: &mut SceneGraph, center: Point, radius: f64, style: Style) -> NodeId {
-    let r = if radius <= 0.0 { DEFAULT_DOT_RADIUS } else { radius };
+    let r = if radius <= 0.0 {
+        DEFAULT_DOT_RADIUS
+    } else {
+        radius
+    };
     graph.add(Mobject::new(geometry::circle(center, r)).with_style(style))
 }
 
@@ -120,7 +124,10 @@ fn add_number_line_into(
                 Point::new(px, -opts.tick_size),
                 Point::new(px, opts.tick_size),
             );
-            graph.add_child(group, Mobject::new(tick).with_style(style.clone().no_fill()));
+            graph.add_child(
+                group,
+                Mobject::new(tick).with_style(style.clone().no_fill()),
+            );
         }
     }
 }
@@ -213,6 +220,51 @@ pub fn add_vector(graph: &mut SceneGraph, end: Point, style: Style) -> NodeId {
     add_arrow(graph, Point::ORIGIN, end, 0.0, 0.0, style)
 }
 
+/// Grid of arrows from a vector function (Manim `ArrowVectorField`, static).
+///
+/// Each sample `(x, y)` gets an arrow of `(vx, vy)`, scaled so its length is
+/// at most `max_len` (treated as 0.45 when `max_len <= 0`). Near-zero vectors
+/// (`len < 1e-6`) are skipped.
+pub fn add_arrow_field(
+    graph: &mut SceneGraph,
+    x_min: f64,
+    x_max: f64,
+    y_min: f64,
+    y_max: f64,
+    x_step: f64,
+    y_step: f64,
+    vx: impl Fn(f64, f64) -> f64,
+    vy: impl Fn(f64, f64) -> f64,
+    max_len: f64,
+    style: Style,
+) -> NodeId {
+    let group = graph.add(Mobject::group().named("arrow_field"));
+    let max_len = if max_len > 0.0 { max_len } else { 0.45 };
+    if x_step <= 0.0 || y_step <= 0.0 {
+        return group;
+    }
+    let nx = ((x_max - x_min) / x_step).round() as i32;
+    let ny = ((y_max - y_min) / y_step).round() as i32;
+    for j in 0..=ny {
+        let y = y_min + j as f64 * y_step;
+        for i in 0..=nx {
+            let x = x_min + i as f64 * x_step;
+            let dx = vx(x, y);
+            let dy = vy(x, y);
+            let len = dx.hypot(dy);
+            if len < 1e-6 {
+                continue;
+            }
+            let scale = (max_len / len).min(1.0);
+            let start = Point::new(x, y);
+            let end = Point::new(x + dx * scale, y + dy * scale);
+            let arrow = add_arrow(graph, start, end, 0.0, 0.0, style.clone());
+            graph.reparent(arrow, Some(group));
+        }
+    }
+    group
+}
+
 /// Arrow with tips at both ends.
 pub fn add_double_arrow(
     graph: &mut SceneGraph,
@@ -231,7 +283,10 @@ pub fn add_double_arrow(
     let tip_end = geometry::arrow_tip(start, end, tip, tip * 0.7);
     let tip_start = geometry::arrow_tip(end, start, tip, tip * 0.7);
     let color = style.stroke.or(style.fill).unwrap_or_else(palette::white);
-    graph.add_child(group, Mobject::new(shaft).with_style(style.clone().no_fill()));
+    graph.add_child(
+        group,
+        Mobject::new(shaft).with_style(style.clone().no_fill()),
+    );
     graph.add_child(
         group,
         Mobject::new(tip_end).with_style(Style::filled(color).no_stroke()),
@@ -259,7 +314,11 @@ pub fn add_surrounding_rect(
     } else {
         geometry::rect(bb.center(), w, h)
     };
-    graph.add(Mobject::new(path).with_style(style).named("surrounding_rect"))
+    graph.add(
+        Mobject::new(path)
+            .with_style(style)
+            .named("surrounding_rect"),
+    )
 }
 
 /// Horizontal line just below `target` (Manim `Underline`).
@@ -471,9 +530,11 @@ pub fn add_area_under(
     style: Style,
 ) -> NodeId {
     graph.add(
-        Mobject::new(geometry::area_under(x_min, x_max, samples, unit_x, unit_y, f))
-            .with_style(style)
-            .named("area"),
+        Mobject::new(geometry::area_under(
+            x_min, x_max, samples, unit_x, unit_y, f,
+        ))
+        .with_style(style)
+        .named("area"),
     )
 }
 
@@ -559,7 +620,10 @@ pub fn add_curved_arrow(
     let tip = geometry::arrow_tip(tip_base, end, tip_len, tip_len * 0.7);
     let color = style.stroke.or(style.fill).unwrap_or_else(palette::white);
     let group = graph.add(Mobject::group().named("curved_arrow"));
-    graph.add_child(group, Mobject::new(shaft).with_style(style.clone().no_fill()));
+    graph.add_child(
+        group,
+        Mobject::new(shaft).with_style(style.clone().no_fill()),
+    );
     graph.add_child(
         group,
         Mobject::new(tip).with_style(Style::filled(color).no_stroke()),
@@ -723,7 +787,9 @@ mod tests {
             sq,
             0.25,
             0.0,
-            Style::default().no_fill().with_stroke(palette::yellow(), 4.0),
+            Style::default()
+                .no_fill()
+                .with_stroke(palette::yellow(), 4.0),
         );
         let a = g.bounding_box(sq);
         let b = g.bounding_box(r);
@@ -834,5 +900,25 @@ mod tests {
         let vals = number_line_tick_values(&NumberLineOpts::default());
         assert!(!vals.is_empty());
     }
-}
 
+    #[test]
+    fn constant_arrow_field_has_several_children() {
+        let mut g = SceneGraph::new();
+        let id = add_arrow_field(
+            &mut g,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            1.0,
+            1.0,
+            |_, _| 1.0,
+            |_, _| 0.0,
+            0.45,
+            Style::default(),
+        );
+        let n = g.children_of(id).len();
+        assert!(n >= 9, "expected a 3x3 field of arrows, got {n}");
+        assert_eq!(g.get(id).name.as_deref(), Some("arrow_field"));
+    }
+}

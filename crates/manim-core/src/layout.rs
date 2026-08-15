@@ -105,8 +105,10 @@ impl SceneGraph {
             Some(p) => self.world_transform(p),
             None => Affine::IDENTITY,
         };
-        let new_local =
-            parent_world.inverse() * Affine::translate(delta) * parent_world * self.get(id).transform;
+        let new_local = parent_world.inverse()
+            * Affine::translate(delta)
+            * parent_world
+            * self.get(id).transform;
         self.get_mut(id).transform = new_local;
     }
 
@@ -123,6 +125,13 @@ impl SceneGraph {
     /// Place `id` next to `other` in `direction` (Manim `next_to`).
     pub fn next_to(&mut self, id: NodeId, other: NodeId, direction: Vec2, buff: f64) {
         self.next_to_aligned(id, other, direction, buff, Vec2::ZERO);
+    }
+
+    /// World-space delta `next_to` would apply, without mutating the graph.
+    pub fn next_to_delta(&self, id: NodeId, other: NodeId, direction: Vec2, buff: f64) -> Vec2 {
+        let target = self.critical_point(other, direction);
+        let mine = self.critical_point(id, -direction);
+        (target - mine) + direction * buff
     }
 
     pub fn next_to_aligned(
@@ -223,7 +232,11 @@ impl SceneGraph {
     /// Non-uniform scale about the local pivot. `dim` 0 = x, 1 = y.
     pub fn stretch(&mut self, id: NodeId, factor: f64, dim: usize) {
         let about = self.local_pivot(id);
-        let (sx, sy) = if dim == 0 { (factor, 1.0) } else { (1.0, factor) };
+        let (sx, sy) = if dim == 0 {
+            (factor, 1.0)
+        } else {
+            (1.0, factor)
+        };
         let s = Affine::translate(about.to_vec2())
             * Affine::scale_non_uniform(sx, sy)
             * Affine::translate(-about.to_vec2());
@@ -371,7 +384,11 @@ mod tests {
         let p = g.center_of(c);
         assert!(p.x.abs() < 1e-6, "to_edge UP must not move x, got {p:?}");
         let top = g.critical_point(c, UP);
-        assert!((top.y - (FRAME_Y_RADIUS - 0.5)).abs() < 1e-6, "top.y={}", top.y);
+        assert!(
+            (top.y - (FRAME_Y_RADIUS - 0.5)).abs() < 1e-6,
+            "top.y={}",
+            top.y
+        );
     }
 
     #[test]
@@ -385,6 +402,23 @@ mod tests {
             "left.x={}",
             left.x
         );
+    }
+
+    #[test]
+    fn next_to_delta_matches_next_to() {
+        let mut g = SceneGraph::new();
+        let a = circle_at(&mut g, Point::ORIGIN, 0.5);
+        let b = circle_at(&mut g, Point::ORIGIN, 0.5);
+        let delta = g.next_to_delta(b, a, RIGHT, 0.25);
+        g.shift(b, delta);
+        let mut g2 = SceneGraph::new();
+        let a2 = circle_at(&mut g2, Point::ORIGIN, 0.5);
+        let b2 = circle_at(&mut g2, Point::ORIGIN, 0.5);
+        g2.next_to(b2, a2, RIGHT, 0.25);
+        let p = g.center_of(b);
+        let q = g2.center_of(b2);
+        assert!((p.x - q.x).abs() < 1e-9 && (p.y - q.y).abs() < 1e-9);
+        assert!(p.x > 1.0);
     }
 
     #[test]

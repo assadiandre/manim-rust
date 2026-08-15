@@ -3,9 +3,9 @@
 
 use std::collections::HashMap;
 
-use manim_core::{Mobject, NodeId, OrthoCamera2D, SceneGraph};
 use manim_core::peniko::Color;
 use manim_core::{add_surrounding_rect, Style};
+use manim_core::{Mobject, NodeId, OrthoCamera2D, SceneGraph};
 
 use crate::animation::{Animation, Prop};
 use crate::easing::Easing;
@@ -69,11 +69,7 @@ impl Timeline {
         if self.camera_anims.is_empty() {
             return self.camera_base.clone();
         }
-        let chosen = self
-            .camera_anims
-            .iter()
-            .rev()
-            .find(|a| a.start <= t);
+        let chosen = self.camera_anims.iter().rev().find(|a| a.start <= t);
         match chosen {
             Some(a) => {
                 let alpha = a.easing.eval((t - a.start) / a.duration.max(1e-9));
@@ -118,12 +114,14 @@ impl Scene {
     }
 
     /// Play animations simultaneously; each starts at the end of the
-    /// previous `play`.
+    /// previous `play`. An animation's existing `start` is treated as an
+    /// offset from that instant (used by Write / Circumscribe / LaggedStart).
     pub fn play(&mut self, animations: impl IntoIterator<Item = Animation>) {
         let mut span = 0.0_f64;
         for mut a in animations {
-            a.start += self.now;
-            span = span.max(a.duration);
+            let rel = a.start;
+            a.start = self.now + rel;
+            span = span.max(rel + a.duration);
             a.apply_final(&mut self.graph);
             self.timeline.animations.push(a);
         }
@@ -271,7 +269,12 @@ impl Scene {
     }
 
     pub fn play_move_along_path(&mut self, target: NodeId, path: NodeId, duration: f64) {
-        self.play([Animation::move_along_path(&self.graph, target, path, duration)]);
+        self.play([Animation::move_along_path(
+            &self.graph,
+            target,
+            path,
+            duration,
+        )]);
     }
 
     pub fn play_spin_in(&mut self, target: NodeId, duration: f64) {
@@ -387,10 +390,9 @@ mod tests {
     fn easing_is_applied() {
         let mut scene = Scene::new();
         let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
-        scene.play([
-            Animation::shift(&scene.graph, c, Vec2::new(1.0, 0.0), 1.0)
-                .with_easing(Easing::Linear),
-        ]);
+        scene
+            .play([Animation::shift(&scene.graph, c, Vec2::new(1.0, 0.0), 1.0)
+                .with_easing(Easing::Linear)]);
         let mut sim = scene.graph.clone();
         scene.timeline.apply(&mut sim, 0.25);
         let p = sim.get(c).transform * Point::ORIGIN;
@@ -401,10 +403,12 @@ mod tests {
     fn sequential_same_property_animations_compose() {
         let mut scene = Scene::new();
         let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
-        scene.play([Animation::shift(&scene.graph, c, Vec2::new(1.0, 0.0), 1.0)
-            .with_easing(Easing::Linear)]);
-        scene.play([Animation::shift(&scene.graph, c, Vec2::new(1.0, 0.0), 1.0)
-            .with_easing(Easing::Linear)]);
+        scene
+            .play([Animation::shift(&scene.graph, c, Vec2::new(1.0, 0.0), 1.0)
+                .with_easing(Easing::Linear)]);
+        scene
+            .play([Animation::shift(&scene.graph, c, Vec2::new(1.0, 0.0), 1.0)
+                .with_easing(Easing::Linear)]);
 
         // Midway through the second shift: x should be 1.5, not reset by
         // the first animation.
@@ -452,9 +456,7 @@ mod tests {
     fn grow_starts_collapsed() {
         let mut scene = Scene::new();
         let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
-        scene.play([
-            Animation::grow_from_center(&scene.graph, c, 1.0).with_easing(Easing::Linear),
-        ]);
+        scene.play([Animation::grow_from_center(&scene.graph, c, 1.0).with_easing(Easing::Linear)]);
         let mut sim = scene.graph.clone();
         scene.timeline.apply(&mut sim, 0.0);
         let p = sim.get(c).transform * Point::new(1.0, 0.0);
@@ -476,6 +478,24 @@ mod tests {
         scene.timeline.apply(&mut sim, 1.0);
         let end = sim.get(c).transform * Point::new(1.0, 0.0);
         assert!((end.x - 1.0).abs() < 1e-6, "x={}", end.x);
+    }
+
+    #[test]
+    fn play_honors_relative_start_offsets() {
+        let mut scene = Scene::new();
+        let a = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.5)));
+        let b = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.5)));
+        let mut late = Animation::fade_in(&scene.graph, b, 1.0).with_easing(Easing::Linear);
+        late.start = 0.5;
+        scene.play([
+            Animation::fade_in(&scene.graph, a, 1.0).with_easing(Easing::Linear),
+            late,
+        ]);
+        assert!((scene.duration() - 1.5).abs() < 1e-9);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.25);
+        assert!((sim.get(a).style.opacity - 0.25).abs() < 1e-6);
+        assert_eq!(sim.get(b).style.opacity, 0.0);
     }
 
     #[test]
@@ -628,10 +648,16 @@ mod tests {
         let mut sim = scene.graph.clone();
         scene.timeline.apply(&mut sim, 0.0);
         let t0 = sim.center_of(target);
-        assert!((t0.x - src_start.x).abs() < 0.05 && (t0.y - src_start.y).abs() < 0.05, "t0={t0:?}");
+        assert!(
+            (t0.x - src_start.x).abs() < 0.05 && (t0.y - src_start.y).abs() < 0.05,
+            "t0={t0:?}"
+        );
 
         scene.timeline.apply(&mut sim, 1.0);
         let t1 = sim.center_of(target);
-        assert!((t1.x - dst_end.x).abs() < 0.05 && (t1.y - dst_end.y).abs() < 0.05, "t1={t1:?}");
+        assert!(
+            (t1.x - dst_end.x).abs() < 0.05 && (t1.y - dst_end.y).abs() < 0.05,
+            "t1={t1:?}"
+        );
     }
 }
