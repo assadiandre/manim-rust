@@ -32,6 +32,7 @@ use manim_core::{
 use manim_render::{render_video, Renderer};
 use manim_typst::{
     add_axes_labels as rust_add_axes_labels, add_brace_label as rust_add_brace_label,
+    add_graph_label as rust_add_graph_label,
     add_code as rust_add_code, add_decimal as rust_add_decimal, add_math,
     add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
     add_complex_plane_labels as rust_add_complex_plane_labels,
@@ -1050,6 +1051,33 @@ impl PyScene {
         .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
+    #[pyo3(signature = (plot, source, x = 1.0, direction = "right", buff = 0.25, color = "white", font_size_pt = 36.0))]
+    fn add_graph_label(
+        &mut self,
+        plot: NodeId,
+        source: &str,
+        x: f64,
+        direction: &str,
+        buff: f64,
+        color: &str,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: Some(parse_color(color)?),
+        };
+        rust_add_graph_label(
+            &mut self.scene.graph,
+            plot,
+            source,
+            x,
+            parse_direction(direction)?,
+            buff,
+            &options,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
     #[pyo3(signature = (target, buff = 0.15, fill = "black", opacity = 0.75))]
     fn add_background_rect(
         &mut self,
@@ -1568,15 +1596,92 @@ impl PyScene {
     }
 
     /// Play several compiled animation specs in one `play` window.
-    ///
-    /// Each spec is `(kind, target, duration, easing, a, b, extra)`.
-    /// `a`/`b`/`extra` are kind-specific (shift delta, scale factor, color…).
-    /// An animation's relative start is 0 unless the kind staggers internally
-    /// (write, circumscribe). Python builds this list; Rust evaluates it.
     fn play_bundle(
         &mut self,
         specs: Vec<(String, usize, f64, String, f64, f64, String)>,
     ) -> PyResult<()> {
+        let (anims, consume) = self.compile_specs(specs)?;
+        self.scene.play(anims);
+        for id in consume {
+            self.scene.graph.remove(id);
+        }
+        Ok(())
+    }
+
+    /// LaggedStart: each spec group begins `lag_ratio * prev_span` after the
+    /// previous spec. Expanded leaves of one spec (Create on a group) share
+    /// a start.
+    fn play_lagged_bundle(
+        &mut self,
+        specs: Vec<(String, usize, f64, String, f64, f64, String)>,
+        lag_ratio: f64,
+    ) -> PyResult<()> {
+        let mut all = Vec::new();
+        let mut consume = Vec::new();
+        let mut cursor = 0.0;
+        for spec in specs {
+            let (group, cons) = self.compile_specs(vec![spec])?;
+            consume.extend(cons);
+            let span = group
+                .iter()
+                .map(|a| a.start + a.duration)
+                .fold(0.0_f64, f64::max);
+            for mut a in group {
+                a.start += cursor;
+                all.push(a);
+            }
+            cursor += span * lag_ratio;
+        }
+        self.scene.play(all);
+        for id in consume {
+            self.scene.graph.remove(id);
+        }
+        Ok(())
+    }
+
+    fn wait(&mut self, duration: f64) {
+        self.scene.wait(duration);
+    }
+
+    fn duration(&self) -> f64 {
+        self.scene.duration()
+    }
+
+    #[pyo3(signature = (path, fps = 60))]
+    fn render(&mut self, path: &str, fps: u32) -> PyResult<()> {
+        let mut renderer = Renderer::new(self.width, self.height, self.background)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        render_video(
+            &self.scene.graph,
+            &self.scene.timeline,
+            &mut renderer,
+            fps,
+            std::path::Path::new(path),
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Render a single frame at `time` to a PNG.
+    #[pyo3(signature = (path, time = 0.0))]
+    fn save_png(&mut self, path: &str, time: f64) -> PyResult<()> {
+        let mut renderer = Renderer::new(self.width, self.height, self.background)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let mut sim = self.scene.graph.clone();
+        self.scene.timeline.apply(&mut sim, time);
+        renderer.camera = self.scene.timeline.camera_at(time);
+        renderer
+            .save_png(&mut sim, std::path::Path::new(path))
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+}
+
+impl PyScene {
+    /// Each spec is `(kind, target, duration, easing, a, b, extra)`.
+    fn compile_specs(
+        &mut self,
+        specs: Vec<(String, usize, f64, String, f64, f64, String)>,
+    ) -> PyResult<(Vec<Animation>, Vec<usize>)> {
         let mut anims = Vec::new();
         let mut consume = Vec::new();
         for (kind, target, duration, easing, a, b, extra) in specs {
@@ -1802,47 +1907,7 @@ impl PyScene {
                 }
             }
         }
-        self.scene.play(anims);
-        for id in consume {
-            self.scene.graph.remove(id);
-        }
-        Ok(())
-    }
-
-    fn wait(&mut self, duration: f64) {
-        self.scene.wait(duration);
-    }
-
-    fn duration(&self) -> f64 {
-        self.scene.duration()
-    }
-
-    #[pyo3(signature = (path, fps = 60))]
-    fn render(&mut self, path: &str, fps: u32) -> PyResult<()> {
-        let mut renderer = Renderer::new(self.width, self.height, self.background)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        render_video(
-            &self.scene.graph,
-            &self.scene.timeline,
-            &mut renderer,
-            fps,
-            std::path::Path::new(path),
-        )
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        Ok(())
-    }
-
-    /// Render a single frame at `time` to a PNG.
-    #[pyo3(signature = (path, time = 0.0))]
-    fn save_png(&mut self, path: &str, time: f64) -> PyResult<()> {
-        let mut renderer = Renderer::new(self.width, self.height, self.background)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        let mut sim = self.scene.graph.clone();
-        self.scene.timeline.apply(&mut sim, time);
-        renderer.camera = self.scene.timeline.camera_at(time);
-        renderer
-            .save_png(&mut sim, std::path::Path::new(path))
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+        Ok((anims, consume))
     }
 }
 
