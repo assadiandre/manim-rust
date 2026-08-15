@@ -277,6 +277,26 @@ fn graph_label_sits_right_of_yx_plot() {
 }
 
 #[test]
+fn labeled_dot_sits_above_origin() {
+    use manim_core::constants::UP;
+    use manim_core::SceneGraph;
+    use manim_typst::add_labeled_dot;
+    let mut g = SceneGraph::new();
+    let id = add_labeled_dot(
+        &mut g,
+        manim_core::kurbo::Point::ORIGIN,
+        "A",
+        UP,
+        0.2,
+        &MathOptions::default(),
+    )
+    .unwrap();
+    let c = g.center_of(id);
+    assert!(c.y > 0.0, "group center should be above the dot, {c:?}");
+    assert_eq!(g.get(id).name.as_deref(), Some("labeled_dot"));
+}
+
+#[test]
 fn complex_plane_labels_include_i() {
     use manim_core::SceneGraph;
     use manim_typst::add_complex_plane_labels;

@@ -778,6 +778,52 @@ pub fn add_graph_label(
     Ok(id)
 }
 
+/// Dot plus a math label (Manim `LabeledDot`).
+pub fn add_labeled_dot(
+    scene: &mut manim_core::SceneGraph,
+    center: kurbo::Point,
+    source: &str,
+    direction: kurbo::Vec2,
+    buff: f64,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let fill = options.color.unwrap_or_else(palette_white);
+    let dot = manim_core::add_dot(
+        scene,
+        center,
+        manim_core::DEFAULT_DOT_RADIUS,
+        Style::filled(fill),
+    );
+    let label = add_math(scene, source, options)?;
+    scene.next_to(label, dot, direction, buff);
+    let group = scene.group_nodes(&[dot, label]);
+    scene.get_mut(group).name = Some("labeled_dot".into());
+    Ok(group)
+}
+
+/// Line plus a math label at the midpoint (Manim `LabeledLine`).
+pub fn add_labeled_line(
+    scene: &mut manim_core::SceneGraph,
+    start: kurbo::Point,
+    end: kurbo::Point,
+    source: &str,
+    direction: kurbo::Vec2,
+    buff: f64,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let stroke = options.color.unwrap_or_else(palette_white);
+    let line = scene.add(
+        Mobject::new(manim_core::geometry::line(start, end))
+            .with_style(Style::default().with_stroke(stroke, 4.0)),
+    );
+    let label = add_math(scene, source, options)?;
+    let mid = start.lerp(end, 0.5);
+    scene.next_to_point(label, mid, direction, buff);
+    let group = scene.group_nodes(&[line, label]);
+    scene.get_mut(group).name = Some("labeled_line".into());
+    Ok(group)
+}
+
 /// Axis tick labels: x below the axis, y to the left. Origin is labeled
 /// only on x so "0" is not drawn twice.
 pub fn add_axes_labels(
