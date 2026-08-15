@@ -612,3 +612,158 @@ pub fn add_brace_label(
     scene.next_to(text, brace, direction, 0.12);
     Ok(scene.group_nodes(&[brace, text]))
 }
+
+fn format_matrix_entry(v: f64) -> String {
+    if v.fract().abs() < 1e-9 {
+        format!("{}", v as i64)
+    } else {
+        format!("{v}")
+    }
+}
+
+/// Matrix as Typst math `mat(...)` (Manim `Matrix`).
+pub fn add_matrix(
+    scene: &mut manim_core::SceneGraph,
+    rows: &[Vec<f64>],
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    if rows.is_empty() || rows.iter().any(|r| r.is_empty()) {
+        return Err(TypstError::Compile("empty matrix".into()));
+    }
+    let body = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .copied()
+                .map(format_matrix_entry)
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    add_math(scene, &format!("mat({body})"), options)
+}
+
+fn escape_typst_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Static code listing as a Typst raw block (Manim `Code`).
+///
+/// DejaVu Sans Mono is bundled in `typst-assets` (same fonts `MathWorld`
+/// already loads), so we set it explicitly. No extra font download.
+pub fn add_code(
+    scene: &mut manim_core::SceneGraph,
+    source: &str,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let escaped = escape_typst_string(source);
+    let markup = format!(
+        "#set par(leading: 0.65em)\n#set text(font: \"DejaVu Sans Mono\", size: {}pt)\n#raw(block: true, \"{escaped}\")",
+        options.font_size_pt,
+    );
+    match add_text(scene, &markup, options) {
+        Ok(id) => Ok(id),
+        Err(_) => add_text(scene, source, options),
+    }
+}
+
+/// Tick values matching `construct.rs` number-line ticks: `x_min..=x_max`
+/// by `x_step`, skipping `x_max` when `include_tip` (the tip occupies that end).
+fn number_line_ticks(x_min: f64, x_max: f64, x_step: f64, include_tip: bool) -> Vec<f64> {
+    if x_step <= 0.0 {
+        return Vec::new();
+    }
+    let n = ((x_max - x_min) / x_step).round() as i32;
+    let mut out = Vec::new();
+    for i in 0..=n {
+        let x = x_min + i as f64 * x_step;
+        if include_tip && (x - x_max).abs() < 1e-9 {
+            continue;
+        }
+        out.push(x);
+    }
+    out
+}
+
+fn add_tick_label(
+    scene: &mut manim_core::SceneGraph,
+    value: f64,
+    pos: Point,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let places = if value.fract().abs() < 1e-9 { 0 } else { 1 };
+    let id = add_decimal(scene, value, places, options)?;
+    scene.move_to(id, pos);
+    Ok(id)
+}
+
+/// Decimal labels under a number line's ticks (Manim `NumberLine` labels).
+pub fn add_number_line_labels(
+    scene: &mut manim_core::SceneGraph,
+    opts_x_min: f64,
+    opts_x_max: f64,
+    opts_x_step: f64,
+    unit_size: f64,
+    include_tip: bool,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let mut ids = Vec::new();
+    for x in number_line_ticks(opts_x_min, opts_x_max, opts_x_step, include_tip) {
+        ids.push(add_tick_label(
+            scene,
+            x,
+            Point::new(x * unit_size, -0.35),
+            options,
+        )?);
+    }
+    Ok(scene.group_nodes(&ids))
+}
+
+/// Axis tick labels: x below the axis, y to the left. Origin is labeled
+/// only on x so "0" is not drawn twice.
+pub fn add_axes_labels(
+    scene: &mut manim_core::SceneGraph,
+    x_min: f64,
+    x_max: f64,
+    x_step: f64,
+    y_min: f64,
+    y_max: f64,
+    y_step: f64,
+    unit_size: f64,
+    include_tip: bool,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let mut ids = Vec::new();
+    for x in number_line_ticks(x_min, x_max, x_step, include_tip) {
+        ids.push(add_tick_label(
+            scene,
+            x,
+            Point::new(x * unit_size, -0.35),
+            options,
+        )?);
+    }
+    for y in number_line_ticks(y_min, y_max, y_step, include_tip) {
+        if y.abs() < 1e-9 {
+            continue;
+        }
+        ids.push(add_tick_label(
+            scene,
+            y,
+            Point::new(-0.4, y * unit_size),
+            options,
+        )?);
+    }
+    Ok(scene.group_nodes(&ids))
+}

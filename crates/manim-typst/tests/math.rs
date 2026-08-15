@@ -166,3 +166,48 @@ fn tex_textcolor_applies_via_shim() {
         assert_eq!((c.r, c.g, c.b), (0, 0, 255), "expected pure blue, got {c:?}");
     }
 }
+
+#[test]
+fn matrix_two_by_two_has_glyphs() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_matrix;
+    let mut g = SceneGraph::new();
+    let id = add_matrix(
+        &mut g,
+        &[vec![1.0, 2.0], vec![3.0, 4.0]],
+        &MathOptions::default(),
+    )
+    .unwrap();
+    let n = g.children_of(id).len();
+    assert!(n > 4, "expected several path children, got {n}");
+}
+
+#[test]
+fn code_hello_has_glyphs() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_code;
+    let mut g = SceneGraph::new();
+    let id = add_code(&mut g, "fn main() {}", &MathOptions::default()).unwrap();
+    assert!(
+        !g.children_of(id).is_empty(),
+        "expected code glyphs from #raw"
+    );
+}
+
+#[test]
+fn number_line_labels_count() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_number_line_labels;
+    let mut g = SceneGraph::new();
+    let id = add_number_line_labels(
+        &mut g,
+        -2.0,
+        2.0,
+        1.0,
+        1.0,
+        false,
+        &MathOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(g.children_of(id).len(), 5);
+}
