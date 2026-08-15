@@ -199,6 +199,7 @@ from manim_rust.mobject import (
 )
 from manim_rust.more import (
     Angle,
+    ArcPolygon,
     BraceLabel,
     Code,
     Cross,
@@ -210,6 +211,7 @@ from manim_rust.more import (
     DoubleArrow,
     Elbow,
     Exclusion,
+    ImageMobject,
     Intersection,
     Matrix,
     PolarPlane,
@@ -226,6 +228,7 @@ __all__ = [
     "Animation",
     "AnimationGroup",
     "ApplyWave",
+    "ArcPolygon",
     "ArcBetweenPoints",
     "Blink",
     "Angle",
@@ -371,6 +374,7 @@ __all__ = [
     "SpiralIn",
     "Sector",
     "SurroundingRectangle",
+    "ImageMobject",
     "SVGMobject",
     "Shift",
     "ShowPassingFlash",

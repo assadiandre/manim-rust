@@ -15,7 +15,8 @@ use manim_core::constants::{
 use manim_core::kurbo::{Point, Vec2};
 use manim_core::peniko::Color;
 use manim_core::{
-    add_angle as rust_add_angle, add_area_between as rust_add_area_between,
+    add_angle as rust_add_angle, add_arc_polygon as rust_add_arc_polygon,
+    add_area_between as rust_add_area_between,
     add_area_under as rust_add_area_under,
     add_arrow as rust_add_arrow, add_arrow_field as rust_add_arrow_field,
     add_axes as rust_add_axes, add_background_rect as rust_add_background_rect,
@@ -27,7 +28,7 @@ use manim_core::{
     add_polar_plane as rust_add_polar_plane, add_riemann_rects as rust_add_riemann_rects,
     add_right_angle as rust_add_right_angle, add_surrounding_rect as rust_add_surrounding_rect,
     add_boolean as rust_add_boolean, add_implicit_curve as rust_add_implicit_curve,
-    add_svg as rust_add_svg,
+    add_raster as rust_add_raster, add_svg as rust_add_svg, raster_from_path, raster_from_rgba,
     add_tangent_line as rust_add_tangent_line, add_underline as rust_add_underline,
     add_vector as rust_add_vector, add_vertical_line_to_graph as rust_add_vertical_line_to_graph,
     geometry, palette, BooleanOp,
@@ -391,6 +392,25 @@ impl PyScene {
             y0,
             style,
         ))
+    }
+
+    #[pyo3(signature = (path, height = 2.0))]
+    fn add_image(&mut self, path: &str, height: f64) -> PyResult<usize> {
+        let img = raster_from_path(path).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(rust_add_raster(&mut self.scene.graph, img, height))
+    }
+
+    #[pyo3(signature = (width, height_px, rgba, height = 2.0))]
+    fn add_image_rgba(
+        &mut self,
+        width: u32,
+        height_px: u32,
+        rgba: Vec<u8>,
+        height: f64,
+    ) -> PyResult<usize> {
+        let img = raster_from_rgba(width, height_px, rgba)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(rust_add_raster(&mut self.scene.graph, img, height))
     }
 
     #[pyo3(signature = (source, height = 2.0))]
@@ -1247,6 +1267,25 @@ impl PyScene {
         Ok(self
             .scene
             .add(Mobject::new(geometry::polygon(&pts)).with_style(style)))
+    }
+
+    #[pyo3(signature = (points, arc_angle = 0.7853981633974483, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_arc_polygon(
+        &mut self,
+        points: Vec<(f64, f64)>,
+        arc_angle: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let pts: Vec<Point> = points.into_iter().map(|(x, y)| Point::new(x, y)).collect();
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_arc_polygon(
+            &mut self.scene.graph,
+            &pts,
+            arc_angle,
+            style,
+        ))
     }
 
     #[pyo3(signature = (sides = 6, radius = 1.0, x = 0.0, y = 0.0, rotation = 0.0, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]

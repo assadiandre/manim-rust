@@ -24,6 +24,22 @@ class Polygon(VMobject):
         return raw.add_polygon(points, fill=fill, stroke=stroke, stroke_width=width)
 
 
+class ArcPolygon(VMobject):
+    """Closed polygon whose sides are circular arcs of a shared sweep angle."""
+
+    def __init__(self, *vertices, angle=0.7853981633974483, **kwargs):
+        super().__init__(**kwargs)
+        self.vertices = vertices
+        self.angle = angle
+
+    def _add(self, raw):
+        fill, stroke, width = self._style()
+        points = [as_xy(v) for v in self.vertices]
+        return raw.add_arc_polygon(
+            points, arc_angle=self.angle, fill=fill, stroke=stroke, stroke_width=width
+        )
+
+
 class Vector(VMobject):
     def __init__(self, direction=RIGHT, color=WHITE, stroke_width=6.0, **kwargs):
         super().__init__(color=color, stroke_width=stroke_width, **kwargs)
@@ -293,6 +309,20 @@ class BraceLabel(Mobject):
             dir_name(self.direction),
             font_size_pt=self.font_size,
         )
+
+
+class ImageMobject(Mobject):
+    """Raster image decoded once at authoring time (PNG/JPEG/etc.)."""
+
+    def __init__(self, filename=None, file_name=None, height=2.0):
+        super().__init__()
+        self.filename = filename or file_name
+        self.height = height
+
+    def _add(self, raw):
+        if not self.filename:
+            raise ValueError("ImageMobject needs filename")
+        return raw.add_image(self.filename, height=self.height)
 
 
 class SVGMobject(VMobject):

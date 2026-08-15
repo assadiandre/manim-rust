@@ -6,11 +6,11 @@ use kurbo::{Affine, Point, Vec2};
 use manim_anim::{Animation, Scene};
 use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
-    add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace,
+    add_angle, add_arc_polygon, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace,
     add_complex_plane,
     add_boolean, add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_graph,
-    add_implicit_curve, add_number_line,
-    add_svg,
+    add_implicit_curve, add_number_line, add_raster,
+    add_svg, checkerboard, raster_from_rgba,
     add_number_plane, add_polar_plane, add_riemann_rects, add_right_angle, add_surrounding_rect,
     add_tangent_line, add_underline, add_vertical_line_to_graph, geometry, layout_graph, palette,
     AxesOpts, BooleanOp, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample,
@@ -1317,6 +1317,49 @@ pub fn probes() -> Vec<Probe> {
     );
     s.play_fade_transform(tiny, big, 1.2);
     out.push(probe("stretch", s, &[0.0, 0.6, 1.2]));
+
+    // ImageMobject: checkerboard + a red→blue gradient
+    let mut s = Scene::new();
+    let check = add_raster(
+        &mut s.graph,
+        checkerboard(8, 8, [255, 255, 0, 255], [88, 196, 221, 255]),
+        3.2,
+    );
+    s.graph.move_to(check, Point::new(-2.6, 0.0));
+    let mut grad = Vec::with_capacity(64 * 16 * 4);
+    for _y in 0..16 {
+        for x in 0..64 {
+            let t = x as f32 / 63.0;
+            grad.extend_from_slice(&[
+                (252.0 * (1.0 - t) + 88.0 * t) as u8,
+                (98.0 * (1.0 - t) + 196.0 * t) as u8,
+                (85.0 * (1.0 - t) + 221.0 * t) as u8,
+                255,
+            ]);
+        }
+    }
+    let strip = add_raster(
+        &mut s.graph,
+        raster_from_rgba(64, 16, grad).expect("gradient rgba"),
+        1.6,
+    );
+    s.graph.move_to(strip, Point::new(2.4, 0.0));
+    out.push(probe("raster", s, &[0.0]));
+
+    // ArcPolygon: quarter-circle sides bulge past the chord square
+    let mut s = Scene::new();
+    add_arc_polygon(
+        &mut s.graph,
+        &[
+            Point::new(-1.4, -1.4),
+            Point::new(1.4, -1.4),
+            Point::new(1.4, 1.4),
+            Point::new(-1.4, 1.4),
+        ],
+        std::f64::consts::FRAC_PI_2,
+        Style::filled(palette::yellow()).with_stroke(palette::white(), 5.0),
+    );
+    out.push(probe("arcp", s, &[0.0]));
 
     out
 }
