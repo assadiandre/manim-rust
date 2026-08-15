@@ -1,8 +1,11 @@
 //! The timeline: an ordered list of animations with absolute start times,
 //! plus `Scene` — the authoring-facing wrapper implementing `play` semantics.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
+use manim_core::geometry;
 use manim_core::peniko::Color;
 use manim_core::{add_surrounding_rect, Style};
 use manim_core::{Mobject, NodeId, OrthoCamera2D, SceneGraph};
@@ -285,6 +288,40 @@ impl Scene {
         self.play([Animation::shrink_to_center(&self.graph, target, duration)]);
     }
 
+    /// Manim `TransformMatchingShapes`: pair path leaves by normalized shape
+    /// hash, shift matches, fade leftovers. Matched target leaves are hidden
+    /// so they do not double-draw.
+    pub fn transform_matching_anims(
+        &mut self,
+        source: NodeId,
+        target: NodeId,
+        duration: f64,
+    ) -> Vec<Animation> {
+        let src = path_targets(&self.graph, source);
+        let dst = path_targets(&self.graph, target);
+        let (pairs, extra_src, extra_dst) = match_leaves_by_shape(&self.graph, &src, &dst);
+        let mut anims = Vec::new();
+        for (s, d) in pairs {
+            let delta = self.graph.center_of(d) - self.graph.center_of(s);
+            // Same-shape matches only travel. Morphing through resampled
+            // polylines turns identical letters into doubled strokes.
+            anims.push(Animation::shift(&self.graph, s, delta, duration));
+            self.graph.get_mut(d).style.opacity = 0.0;
+        }
+        for s in extra_src {
+            anims.push(Animation::fade_out(&self.graph, s, duration));
+        }
+        for d in extra_dst {
+            anims.push(Animation::fade_in(&self.graph, d, duration));
+        }
+        anims
+    }
+
+    pub fn play_transform_matching(&mut self, source: NodeId, target: NodeId, duration: f64) {
+        let anims = self.transform_matching_anims(source, target, duration);
+        self.play(anims);
+    }
+
     /// Source fades out while traveling toward the target; the target fades
     /// in while traveling from the source (Manim `FadeTransform`).
     ///
@@ -310,6 +347,95 @@ impl Scene {
     pub fn duration(&self) -> f64 {
         self.now
     }
+}
+
+/// CE `TransformMatchingShapes.get_mobject_key`: same outline after
+/// centering and fixing size, rounded so tiny flatten noise does not split
+/// identical letters.
+fn shape_key(path: &kurbo::BezPath) -> u64 {
+    const N: usize = 24;
+    let (pts, closed) = geometry::resample(path, N);
+    if pts.is_empty() {
+        return 0;
+    }
+    let mut min_x = f64::MAX;
+    let mut max_x = f64::MIN;
+    let mut min_y = f64::MAX;
+    let mut max_y = f64::MIN;
+    for p in &pts {
+        min_x = min_x.min(p.x);
+        max_x = max_x.max(p.x);
+        min_y = min_y.min(p.y);
+        max_y = max_y.max(p.y);
+    }
+    let cx = 0.5 * (min_x + max_x);
+    let cy = 0.5 * (min_y + max_y);
+    let extent = (max_y - min_y).max(max_x - min_x).max(1e-9);
+    let scale = 1.0 / extent;
+    let mut hasher = DefaultHasher::new();
+    closed.hash(&mut hasher);
+    for p in &pts {
+        let x = ((p.x - cx) * scale * 32.0).round() as i32;
+        let y = ((p.y - cy) * scale * 32.0).round() as i32;
+        x.hash(&mut hasher);
+        y.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+fn match_leaves_by_shape(
+    graph: &SceneGraph,
+    src: &[NodeId],
+    dst: &[NodeId],
+) -> (Vec<(NodeId, NodeId)>, Vec<NodeId>, Vec<NodeId>) {
+    let mut src_by: HashMap<u64, Vec<NodeId>> = HashMap::new();
+    let mut dst_by: HashMap<u64, Vec<NodeId>> = HashMap::new();
+    for &id in src {
+        src_by
+            .entry(shape_key(&graph.get(id).path))
+            .or_default()
+            .push(id);
+    }
+    for &id in dst {
+        dst_by
+            .entry(shape_key(&graph.get(id).path))
+            .or_default()
+            .push(id);
+    }
+    let mut pairs = Vec::new();
+    let mut extra_src = Vec::new();
+    let mut extra_dst = Vec::new();
+    let mut keys: Vec<u64> = src_by.keys().copied().collect();
+    for k in dst_by.keys() {
+        if !src_by.contains_key(k) {
+            keys.push(*k);
+        }
+    }
+    for key in keys {
+        let mut s = src_by.remove(&key).unwrap_or_default();
+        let mut d = dst_by.remove(&key).unwrap_or_default();
+        s.sort_by(|a, b| {
+            graph
+                .center_of(*a)
+                .x
+                .partial_cmp(&graph.center_of(*b).x)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        d.sort_by(|a, b| {
+            graph
+                .center_of(*a)
+                .x
+                .partial_cmp(&graph.center_of(*b).x)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let n = s.len().min(d.len());
+        for i in 0..n {
+            pairs.push((s[i], d[i]));
+        }
+        extra_src.extend(s.into_iter().skip(n));
+        extra_dst.extend(d.into_iter().skip(n));
+    }
+    (pairs, extra_src, extra_dst)
 }
 
 /// Leaves to animate for Create/Write/Uncreate. Falls back to `target` itself
@@ -678,5 +804,78 @@ mod tests {
         scene.timeline.apply(&mut sim, 1.0);
         let w1 = geometry::path_length(&sim.get(id).path);
         assert!(w1 > w0, "start={w0} end={w1}");
+    }
+
+    #[test]
+    fn transform_matching_moves_source_to_target_center() {
+        let mut scene = Scene::new();
+        let src = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.4)));
+        let dst = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.4)));
+        let dest_c = scene.graph.center_of(dst);
+        scene.play_transform_matching(src, dst, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 1.0);
+        let p = sim.center_of(src);
+        assert!(
+            (p.x - dest_c.x).abs() < 0.1 && (p.y - dest_c.y).abs() < 0.1,
+            "{p:?}"
+        );
+        assert_eq!(sim.get(dst).style.opacity, 0.0);
+    }
+
+    #[test]
+    fn circle_and_square_have_different_shape_keys() {
+        let c = geometry::circle(Point::ORIGIN, 0.4);
+        let s = geometry::square(Point::ORIGIN, 0.8);
+        assert_ne!(shape_key(&c), shape_key(&s));
+        assert_eq!(
+            shape_key(&geometry::circle(Point::new(-2.0, 0.0), 0.4)),
+            shape_key(&geometry::circle(Point::new(2.0, 0.0), 0.4)),
+        );
+    }
+
+    #[test]
+    fn transform_matching_fades_unmatched_shapes() {
+        let mut scene = Scene::new();
+        let src = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.4)));
+        let dst = scene.add(Mobject::new(geometry::square(Point::new(2.0, 0.0), 0.8)));
+        scene.play_transform_matching(src, dst, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 1.0);
+        assert!(
+            sim.get(src).style.opacity < 0.01,
+            "src opacity {}",
+            sim.get(src).style.opacity
+        );
+        assert!(
+            sim.get(dst).style.opacity > 0.99,
+            "dst opacity {}",
+            sim.get(dst).style.opacity
+        );
+    }
+
+    #[test]
+    fn transform_matching_pairs_same_shape_not_nearest() {
+        let mut scene = Scene::new();
+        let src = scene.add(Mobject::new(geometry::circle(Point::new(-1.0, 0.0), 0.4)));
+        let dst_g = scene.add(Mobject::group());
+        scene.add_child(
+            dst_g,
+            Mobject::new(geometry::square(Point::new(0.0, 0.0), 0.6)),
+        );
+        let far_circle = scene.add_child(
+            dst_g,
+            Mobject::new(geometry::circle(Point::new(3.0, 0.0), 0.4)),
+        );
+        let dest_c = scene.graph.center_of(far_circle);
+        scene.play_transform_matching(src, dst_g, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 1.0);
+        let p = sim.center_of(src);
+        assert!(
+            (p.x - dest_c.x).abs() < 0.15 && (p.y - dest_c.y).abs() < 0.15,
+            "{p:?} dest={dest_c:?}"
+        );
+        assert_eq!(sim.get(far_circle).style.opacity, 0.0);
     }
 }
