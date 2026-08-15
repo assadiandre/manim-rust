@@ -109,4 +109,6 @@ crates/
   SurroundingRectangle.
 - M16 graph labels + LaggedStart: baked `get_graph_label` via point_at_x
   (no per-frame Python), LaggedStart compiled to staggered start offsets.
+- M17 Axes.plot / get_area / get_riemann_rectangles bake a Python `f(x)`
+  at authoring time; RoundedRectangle, AnnularSector, BackgroundRectangle.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

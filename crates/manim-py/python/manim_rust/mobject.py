@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from manim_rust.constants import (
+    BLUE,
     DEFAULT_MOBJECT_TO_MOBJECT_BUFFER,
     DOWN,
     LEFT,
@@ -223,6 +224,34 @@ class Annulus(VMobject):
         )
 
 
+class AnnularSector(VMobject):
+    def __init__(
+        self,
+        inner_radius=0.5,
+        outer_radius=1.0,
+        start_angle=0.0,
+        angle=1.5707963267948966,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.inner_radius = inner_radius
+        self.outer_radius = outer_radius
+        self.start_angle = start_angle
+        self.angle = angle
+
+    def _add(self, raw):
+        fill, stroke, width = self._style()
+        return raw.add_annular_sector(
+            inner=self.inner_radius,
+            outer=self.outer_radius,
+            start_angle=self.start_angle,
+            sweep=self.angle,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
 class Circle(VMobject):
     def __init__(self, radius=1.0, **kwargs):
         super().__init__(**kwargs)
@@ -272,6 +301,23 @@ class Rectangle(VMobject):
         return raw.add_rect(
             width=self.width,
             height=self.height,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
+class RoundedRectangle(Rectangle):
+    def __init__(self, width=3.0, height=2.0, corner_radius=0.25, **kwargs):
+        super().__init__(width=width, height=height, **kwargs)
+        self.corner_radius = corner_radius
+
+    def _add(self, raw):
+        fill, stroke, width = self._style()
+        return raw.add_rounded_rect(
+            width=self.width,
+            height=self.height,
+            corner_radius=self.corner_radius,
             fill=fill,
             stroke=stroke,
             stroke_width=width,
@@ -550,6 +596,21 @@ class SurroundingRectangle(Mobject):
         return raw.add_surrounding_rect(tid, buff=self.buff, stroke=self.color)
 
 
+class BackgroundRectangle(Mobject):
+    def __init__(self, mobject, color="black", buff=0.15, fill_opacity=0.75):
+        super().__init__()
+        self.target = mobject
+        self.color = color
+        self.buff = buff
+        self.fill_opacity = fill_opacity
+
+    def _add(self, raw):
+        tid = _node_id(self.target, raw)
+        return raw.add_background_rect(
+            tid, buff=self.buff, fill=self.color, opacity=self.fill_opacity
+        )
+
+
 class GraphLabel(Mobject):
     def __init__(
         self,
@@ -596,8 +657,29 @@ class Axes(Mobject):
             y_max=self.y_range[1],
         )
 
+    def plot(self, func, x_range=None, color=YELLOW, stroke_width=4.0):
+        xr = x_range or self.x_range
+        return _AxesPlot(
+            self,
+            func,
+            xr[0],
+            xr[1],
+            color=color,
+            stroke_width=stroke_width,
+            fill_opacity=0.0,
+        )
+
     def get_graph_label(self, graph, label, x=1.0, direction=RIGHT, buff=0.25, **kwargs):
         return GraphLabel(graph, label, x=x, direction=direction, buff=buff, **kwargs)
+
+    def get_area(self, graph, x_range=None, color=BLUE, opacity=0.4):
+        xr = x_range or getattr(graph, "x_range", None) or self.x_range
+        return _AxesArea(graph, xr[0], xr[1], color=color, opacity=opacity)
+
+    def get_riemann_rectangles(self, graph, x_range=None, dx=0.5, color=BLUE, fill_opacity=0.75):
+        xr = x_range or getattr(graph, "x_range", None) or self.x_range
+        n = max(1, int(round((xr[1] - xr[0]) / dx)))
+        return _AxesRiemann(graph, xr[0], xr[1], n, color=color, opacity=fill_opacity)
 
 
 class Table(Mobject):
@@ -681,6 +763,69 @@ class VGroup(Mobject):
 
     def __getitem__(self, i):
         return self.submobjects[i]
+
+
+class _AxesPlot(VMobject):
+    def __init__(self, axes, func, x_min, x_max, **kwargs):
+        super().__init__(**kwargs)
+        self.axes = axes
+        self.func = func
+        self.x_range = (x_min, x_max)
+        self.x_min = x_min
+        self.x_max = x_max
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        parent = _node_id(self.axes, raw)
+        return raw.add_plot(
+            self.func,
+            self.x_min,
+            self.x_max,
+            stroke=stroke,
+            stroke_width=width,
+            parent=parent,
+        )
+
+
+class _AxesArea(Mobject):
+    def __init__(self, graph, x_min, x_max, color=BLUE, opacity=0.4):
+        super().__init__()
+        self.graph = graph
+        self.x_min = x_min
+        self.x_max = x_max
+        self.color = color
+        self.opacity = opacity
+
+    def _add(self, raw):
+        return raw.add_area(
+            self.graph.func,
+            self.x_min,
+            self.x_max,
+            fill=self.color,
+            opacity=self.opacity,
+        )
+
+
+class _AxesRiemann(Mobject):
+    def __init__(self, graph, x_min, x_max, n, color=BLUE, opacity=0.75):
+        super().__init__()
+        self.graph = graph
+        self.x_min = x_min
+        self.x_max = x_max
+        self.n = n
+        self.color = color
+        self.opacity = opacity
+
+    def _add(self, raw):
+        return raw.add_riemann(
+            self.graph.func,
+            self.x_min,
+            self.x_max,
+            n=self.n,
+            color_a=self.color,
+            color_b=self.color,
+            opacity=self.opacity,
+        )
 
 
 class _Animate:
