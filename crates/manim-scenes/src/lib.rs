@@ -13,9 +13,10 @@ use manim_core::{
     AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_typst::{
-    add_code, add_complex_plane_labels, add_decimal, add_decimal_atlas, add_graph_label,
-    add_labeled_dot, add_labeled_line, add_markup, add_math, add_matrix, add_number_line_labels,
-    add_paragraph, add_table, add_table_with_lines, add_text, add_title, digit_atlas, MathOptions,
+    add_bar_chart_labeled, add_bulleted_list, add_code, add_complex_plane_labels, add_decimal,
+    add_decimal_atlas, add_graph_label, add_labeled_dot, add_labeled_line, add_markup, add_math,
+    add_math_table, add_matrix, add_number_line_labels, add_paragraph, add_table,
+    add_table_with_lines, add_text, add_title, digit_atlas, MathOptions,
 };
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
@@ -956,6 +957,61 @@ pub fn probes() -> Vec<Probe> {
     )
     .expect("tgrid");
     out.push(probe("tgrid", s, &[0.0]));
+
+    // Bulleted list + math table
+    let mut s = Scene::new();
+    let list = add_bulleted_list(
+        &mut s.graph,
+        &["Alpha".into(), "Beta".into(), "Gamma".into()],
+        0.4,
+        &MathOptions {
+            font_size_pt: 40.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("list");
+    s.graph.move_to(list, Point::new(-3.4, 0.0));
+    let mtable = add_math_table(
+        &mut s.graph,
+        &[
+            vec!["+".into(), "0".into(), "5".into()],
+            vec!["2".into(), "2".into(), "7".into()],
+        ],
+        &MathOptions {
+            font_size_pt: 36.0,
+            ..MathOptions::default()
+        },
+        0.7,
+        0.45,
+        true,
+        true,
+        Style::default().with_stroke(palette::white(), 2.0),
+    )
+    .expect("mtable");
+    s.graph.move_to(mtable, Point::new(2.4, 0.0));
+    out.push(probe("lists", s, &[0.0]));
+
+    // Bar chart
+    let mut s = Scene::new();
+    add_bar_chart_labeled(
+        &mut s.graph,
+        &[3.0, 5.0, 2.0, 4.0],
+        &["A".into(), "B".into(), "C".into(), "D".into()],
+        0.0,
+        6.0,
+        6.0,
+        3.6,
+        0.6,
+        &[],
+        0.8,
+        2.0,
+        &MathOptions {
+            font_size_pt: 28.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("bars");
+    out.push(probe("bars", s, &[0.0]));
 
     out
 }

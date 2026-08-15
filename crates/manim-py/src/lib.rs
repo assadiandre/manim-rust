@@ -39,6 +39,10 @@ use manim_typst::{
     add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
     add_complex_plane_labels as rust_add_complex_plane_labels,
     add_decimal_atlas as rust_add_decimal_atlas, add_markup as rust_add_markup,
+    add_bar_chart_labeled as rust_add_bar_chart_labeled,
+    add_bulleted_list as rust_add_bulleted_list,
+    add_math_table as rust_add_math_table,
+    add_numbered_list as rust_add_numbered_list,
     add_paragraph as rust_add_paragraph,
     add_table_with_lines as rust_add_table_with_lines,
     add_tex as add_latex, add_text as rust_add_text, add_title as rust_add_title,
@@ -1403,6 +1407,39 @@ impl PyScene {
         })
     }
 
+    /// Bake `f(t) -> (x, y)` into a polyline (authoring-time only).
+    #[pyo3(signature = (f, t_min, t_max, samples = 120, stroke = Some("yellow".to_string()), stroke_width = 5.0))]
+    fn add_parametric(
+        &mut self,
+        f: Bound<'_, PyAny>,
+        t_min: f64,
+        t_max: f64,
+        samples: usize,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let n = samples.max(2);
+        let mut pts = Vec::with_capacity(n);
+        for i in 0..n {
+            let t = t_min + (t_max - t_min) * i as f64 / (n - 1) as f64;
+            let out = f.call1((t,))?;
+            let (x, y) = if let Ok(pair) = out.extract::<(f64, f64)>() {
+                pair
+            } else {
+                let seq: Vec<f64> = out.extract()?;
+                (
+                    seq.first().copied().unwrap_or(0.0),
+                    seq.get(1).copied().unwrap_or(0.0),
+                )
+            };
+            pts.push(Point::new(x, y));
+        }
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(self
+            .scene
+            .add(Mobject::new(geometry::polyline(&pts)).with_style(style)))
+    }
+
     /// Bake `f(x)` into a filled area under the curve (authoring-time only).
     #[pyo3(signature = (f, x_min, x_max, samples = 80, unit_size = 1.0, fill = Some("blue".to_string()), opacity = 0.4))]
     fn add_area(
@@ -1688,6 +1725,131 @@ impl PyScene {
             include_inner_lines,
             include_outer_lines,
             style,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (
+        cells,
+        font_size_pt = 36.0,
+        color = None,
+        include_inner_lines = true,
+        include_outer_lines = true,
+        buff_x = 0.8,
+        buff_y = 0.5,
+        line_color = None,
+        line_stroke_width = 2.0
+    ))]
+    fn add_math_table(
+        &mut self,
+        cells: Vec<Vec<String>>,
+        font_size_pt: f64,
+        color: Option<String>,
+        include_inner_lines: bool,
+        include_outer_lines: bool,
+        buff_x: f64,
+        buff_y: f64,
+        line_color: Option<String>,
+        line_stroke_width: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        let stroke = line_color.as_deref().unwrap_or("white");
+        let style = build_style(None, Some(stroke), line_stroke_width)?;
+        rust_add_math_table(
+            &mut self.scene.graph,
+            &cells,
+            &options,
+            buff_x,
+            buff_y,
+            include_inner_lines,
+            include_outer_lines,
+            style,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (items, buff = 0.5, color = None, font_size_pt = 42.0))]
+    fn add_bulleted_list(
+        &mut self,
+        items: Vec<String>,
+        buff: f64,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_bulleted_list(&mut self.scene.graph, &items, buff, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (items, buff = 0.5, color = None, font_size_pt = 42.0))]
+    fn add_numbered_list(
+        &mut self,
+        items: Vec<String>,
+        buff: f64,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_numbered_list(&mut self.scene.graph, &items, buff, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (
+        values,
+        names = vec![],
+        y_min = 0.0,
+        y_max = 5.0,
+        x_length = 6.0,
+        y_length = 4.0,
+        bar_width = 0.6,
+        colors = vec![],
+        fill_opacity = 0.75,
+        stroke_width = 2.0,
+        font_size_pt = 28.0
+    ))]
+    fn add_bar_chart(
+        &mut self,
+        values: Vec<f64>,
+        names: Vec<String>,
+        y_min: f64,
+        y_max: f64,
+        x_length: f64,
+        y_length: f64,
+        bar_width: f64,
+        colors: Vec<String>,
+        fill_opacity: f32,
+        stroke_width: f64,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let mut parsed = Vec::with_capacity(colors.len());
+        for c in &colors {
+            parsed.push(parse_color(c)?);
+        }
+        rust_add_bar_chart_labeled(
+            &mut self.scene.graph,
+            &values,
+            &names,
+            y_min,
+            y_max,
+            x_length,
+            y_length,
+            bar_width,
+            &parsed,
+            fill_opacity,
+            stroke_width,
+            &MathOptions {
+                font_size_pt,
+                color: None,
+            },
         )
         .map_err(|e| PyValueError::new_err(e.to_string()))
     }

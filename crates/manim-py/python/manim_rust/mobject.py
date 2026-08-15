@@ -496,6 +496,11 @@ class DecimalNumber(Mobject):
         return _DecimalAnimate(self)
 
 
+class Integer(DecimalNumber):
+    def __init__(self, value=0, color=WHITE, font_size=48.0):
+        super().__init__(value=value, num_decimal_places=0, color=color, font_size=font_size)
+
+
 class ValueTracker:
     """Authoring-time float. Animate a DecimalNumber, not this, for display."""
 
@@ -751,6 +756,156 @@ class Table(Mobject):
             buff_y=self.v_buff,
             line_color=self.line_color,
             line_stroke_width=self.line_stroke_width,
+        )
+
+
+class MathTable(Table):
+    def _add(self, raw):
+        cells = [[str(c) for c in row] for row in self.cells]
+        return raw.add_math_table(
+            cells,
+            font_size_pt=self.font_size,
+            color=self.color,
+            include_inner_lines=self.include_inner_lines,
+            include_outer_lines=self.include_outer_lines,
+            buff_x=self.h_buff,
+            buff_y=self.v_buff,
+            line_color=self.line_color,
+            line_stroke_width=self.line_stroke_width,
+        )
+
+
+class IntegerTable(MathTable):
+    def __init__(self, cells, **kwargs):
+        formatted = []
+        for row in cells:
+            formatted.append(
+                [str(int(c)) if not isinstance(c, str) else c for c in row]
+            )
+        super().__init__(formatted, **kwargs)
+
+
+class BulletedList(Mobject):
+    def __init__(self, *items, buff=0.5, color=WHITE, font_size=42.0):
+        super().__init__()
+        self.items = items
+        self.buff = buff
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        return raw.add_bulleted_list(
+            list(self.items),
+            buff=self.buff,
+            color=self.color,
+            font_size_pt=self.font_size,
+        )
+
+
+class NumberedList(Mobject):
+    def __init__(self, *items, buff=0.5, color=WHITE, font_size=42.0):
+        super().__init__()
+        self.items = items
+        self.buff = buff
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        return raw.add_numbered_list(
+            list(self.items),
+            buff=self.buff,
+            color=self.color,
+            font_size_pt=self.font_size,
+        )
+
+
+class FunctionGraph(VMobject):
+    def __init__(self, function, x_range=(-7.0, 7.0), color=YELLOW, stroke_width=4.0, **kwargs):
+        super().__init__(color=color, stroke_width=stroke_width, fill_opacity=0.0, **kwargs)
+        self.function = function
+        self.x_range = x_range
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        xr = self.x_range
+        return raw.add_plot(
+            self.function,
+            xr[0],
+            xr[1],
+            samples=int(xr[2]) if len(xr) > 2 else 80,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
+class ParametricFunction(VMobject):
+    def __init__(self, function, t_range=(0.0, 1.0), color=YELLOW, stroke_width=4.0, **kwargs):
+        super().__init__(color=color, stroke_width=stroke_width, fill_opacity=0.0, **kwargs)
+        self.function = function
+        self.t_range = t_range
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        tr = self.t_range
+        samples = 120
+        if len(tr) > 2 and tr[2] > 0:
+            samples = max(2, int(round((tr[1] - tr[0]) / tr[2])) + 1)
+        return raw.add_parametric(
+            self.function,
+            tr[0],
+            tr[1],
+            samples=samples,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
+class BarChart(Mobject):
+    def __init__(
+        self,
+        values,
+        bar_names=None,
+        y_range=None,
+        x_length=6.0,
+        y_length=4.0,
+        bar_colors=None,
+        bar_width=0.6,
+        bar_fill_opacity=0.75,
+        bar_stroke_width=2.0,
+        font_size=28.0,
+    ):
+        super().__init__()
+        self.values = [float(v) for v in values]
+        self.bar_names = list(bar_names) if bar_names is not None else []
+        if y_range is None:
+            lo = min([0.0] + self.values)
+            hi = max([0.0] + self.values)
+            if hi <= lo:
+                hi = lo + 1.0
+            self.y_range = (lo, hi)
+        else:
+            self.y_range = y_range
+        self.x_length = x_length
+        self.y_length = y_length
+        self.bar_colors = list(bar_colors) if bar_colors is not None else []
+        self.bar_width = bar_width
+        self.bar_fill_opacity = bar_fill_opacity
+        self.bar_stroke_width = bar_stroke_width
+        self.font_size = font_size
+
+    def _add(self, raw):
+        return raw.add_bar_chart(
+            self.values,
+            names=self.bar_names,
+            y_min=self.y_range[0],
+            y_max=self.y_range[1],
+            x_length=self.x_length,
+            y_length=self.y_length,
+            bar_width=self.bar_width,
+            colors=self.bar_colors,
+            fill_opacity=self.bar_fill_opacity,
+            stroke_width=self.bar_stroke_width,
+            font_size_pt=self.font_size,
         )
 
 
