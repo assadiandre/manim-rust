@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from manim_rust.animation import Succession
+from manim_rust.animation import AnimationGroup, Succession
 from manim_rust.mobject import Mobject
 
 
@@ -44,6 +44,24 @@ class Scene:
             succ = anims[0]
             for child in succ.anims:
                 self.play(child, run_time=run_time or succ.run_time, rate_func=rate_func or succ.rate_func)
+            return
+        if len(anims) == 1 and isinstance(anims[0], AnimationGroup):
+            lag = anims[0]
+            specs = []
+            for child in lag.anims:
+                if not hasattr(child, "_spec"):
+                    raise TypeError(
+                        f"AnimationGroup expected an Animation, got {type(child)!r}"
+                    )
+                specs.append(
+                    child._spec(
+                        self._raw,
+                        run_time=run_time or lag.run_time,
+                        rate_func=rate_func or lag.rate_func,
+                    )
+                )
+            if specs:
+                self._raw.play_lagged_bundle(specs, lag.lag_ratio)
             return
         specs = []
         for anim in anims:

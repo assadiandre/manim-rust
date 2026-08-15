@@ -550,6 +550,38 @@ class SurroundingRectangle(Mobject):
         return raw.add_surrounding_rect(tid, buff=self.buff, stroke=self.color)
 
 
+class GraphLabel(Mobject):
+    def __init__(
+        self,
+        plot,
+        source,
+        x=1.0,
+        direction=RIGHT,
+        buff=0.25,
+        color=WHITE,
+        font_size=36.0,
+    ):
+        super().__init__()
+        self.plot = plot
+        self.source = source
+        self.x = x
+        self.direction = direction
+        self.buff = buff
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        return raw.add_graph_label(
+            _node_id(self.plot, raw),
+            self.source,
+            x=self.x,
+            direction=dir_name(self.direction),
+            buff=self.buff,
+            color=self.color,
+            font_size_pt=self.font_size,
+        )
+
+
 class Axes(Mobject):
     def __init__(self, x_range=(-3.0, 3.0), y_range=(-2.0, 2.0)):
         super().__init__()
@@ -563,6 +595,9 @@ class Axes(Mobject):
             y_min=self.y_range[0],
             y_max=self.y_range[1],
         )
+
+    def get_graph_label(self, graph, label, x=1.0, direction=RIGHT, buff=0.25, **kwargs):
+        return GraphLabel(graph, label, x=x, direction=direction, buff=buff, **kwargs)
 
 
 class Table(Mobject):

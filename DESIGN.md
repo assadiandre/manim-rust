@@ -107,4 +107,6 @@ crates/
   shape-hash leaf pairs, shift matches, fade leftovers), Arc / Sector /
   Annulus, and CE wrappers for NumberLine / ComplexPlane / Brace /
   SurroundingRectangle.
+- M16 graph labels + LaggedStart: baked `get_graph_label` via point_at_x
+  (no per-frame Python), LaggedStart compiled to staggered start offsets.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

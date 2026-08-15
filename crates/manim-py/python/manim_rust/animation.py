@@ -238,6 +238,23 @@ class Succession:
         self.rate_func = kwargs.get("rate_func")
 
 
+class AnimationGroup:
+    """Play children together. `lag_ratio > 0` staggers like LaggedStart."""
+
+    def __init__(self, *anims, lag_ratio=0.0, **kwargs):
+        self.anims = anims
+        self.lag_ratio = lag_ratio
+        self.run_time = kwargs.get("run_time")
+        self.rate_func = kwargs.get("rate_func")
+
+
+class LaggedStart(AnimationGroup):
+    """Stagger child animations. Compiled to start offsets at play time."""
+
+    def __init__(self, *anims, lag_ratio=0.05, **kwargs):
+        super().__init__(*anims, lag_ratio=lag_ratio, **kwargs)
+
+
 class _BoundAnim(Animation):
     """Result of `mobject.animate.shift(...)` and friends."""
 

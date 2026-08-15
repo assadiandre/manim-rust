@@ -13,8 +13,8 @@ use manim_core::{
     AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_typst::{
-    add_code, add_complex_plane_labels, add_decimal, add_decimal_atlas, add_math, add_matrix,
-    add_number_line_labels, add_table, add_text, add_title, digit_atlas, MathOptions,
+    add_code, add_complex_plane_labels, add_decimal, add_decimal_atlas, add_graph_label, add_math,
+    add_matrix, add_number_line_labels, add_table, add_text, add_title, digit_atlas, MathOptions,
 };
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
@@ -808,6 +808,57 @@ pub fn probes() -> Vec<Probe> {
     s.graph.shift(dst, RIGHT * 2.4);
     s.play_transform_matching(src, dst, 1.2);
     out.push(probe("anagram", s, &[0.0, 0.4, 0.8, 1.2]));
+
+    // baked graph label sitting to the right of y = 0.35 x^2
+    let mut s = Scene::new();
+    add_axes(
+        &mut s.graph,
+        &AxesOpts {
+            x_min: -3.0,
+            x_max: 3.0,
+            y_min: -1.0,
+            y_max: 3.0,
+            unit_size: 1.0,
+            ..AxesOpts::default()
+        },
+        Style::default().with_stroke(palette::gray(), 3.0),
+    );
+    let plot = s.add(
+        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x)).with_style(
+            Style::default()
+                .with_stroke(palette::yellow(), 5.0)
+                .no_fill(),
+        ),
+    );
+    add_graph_label(
+        &mut s.graph,
+        plot,
+        "x^2",
+        1.6,
+        RIGHT,
+        0.2,
+        &MathOptions::default(),
+    )
+    .expect("graph label");
+    out.push(probe("glabel", s, &[0.0]));
+
+    // LaggedStart: three Creates, each begins after 0.45 of the previous
+    let mut s = Scene::new();
+    let circles: Vec<_> = [-2.2, 0.0, 2.2]
+        .into_iter()
+        .map(|x| {
+            s.add(
+                Mobject::new(geometry::circle(Point::new(x, 0.0), 0.7))
+                    .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+            )
+        })
+        .collect();
+    let anims: Vec<_> = circles
+        .iter()
+        .map(|&id| Animation::create(&s.graph, id, 0.8))
+        .collect();
+    s.play_lagged(anims, 0.45);
+    out.push(probe("lagged", s, &[0.0, 0.35, 0.7, 1.1, 1.6]));
 
     out
 }
