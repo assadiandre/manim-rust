@@ -146,3 +146,12 @@ fn area_under_parabola_closes_with_height() {
     let bb = geometry::bounding_box(&p);
     assert!(bb.height() > 0.5, "h={}", bb.height());
 }
+
+#[test]
+fn area_between_constants_closes_with_height() {
+    let p = geometry::area_between(-1.0, 1.0, 32, 1.0, 1.0, |_| 1.0, |_| 0.0);
+    let (_, closed) = geometry::flatten_points(&p);
+    assert!(closed);
+    let bb = geometry::bounding_box(&p);
+    assert!((bb.height() - 1.0).abs() < 0.05, "h={}", bb.height());
+}

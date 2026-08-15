@@ -538,6 +538,27 @@ pub fn add_area_under(
     )
 }
 
+/// Filled region between `f` and `g` on `[x_min, x_max]`.
+pub fn add_area_between(
+    graph: &mut SceneGraph,
+    x_min: f64,
+    x_max: f64,
+    samples: usize,
+    unit_x: f64,
+    unit_y: f64,
+    f: impl Fn(f64) -> f64,
+    g: impl Fn(f64) -> f64,
+    style: Style,
+) -> NodeId {
+    graph.add(
+        Mobject::new(geometry::area_between(
+            x_min, x_max, samples, unit_x, unit_y, f, g,
+        ))
+        .with_style(style)
+        .named("area"),
+    )
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RiemannSample {
     Left,
@@ -587,20 +608,43 @@ pub fn add_riemann_rects(
     group
 }
 
+fn dash_world_path(
+    graph: &SceneGraph,
+    id: NodeId,
+    num_dashes: usize,
+    dashed_ratio: f64,
+) -> (kurbo::BezPath, Style) {
+    let world = graph.world_transform(id);
+    let (path, style) = {
+        let m = graph.get(id);
+        (m.path.clone(), m.style.clone())
+    };
+    let dashed = geometry::dashed_path(&(world * path), num_dashes, dashed_ratio);
+    (dashed, style)
+}
+
 /// Dashed copy of `target`'s world-space path (Manim `DashedVMobject`).
+///
+/// A single path (or none) stays one node named `"dashed"`. Multiple path
+/// leaves are each dashed and grouped under `"dashed"`.
 pub fn add_dashed_copy(
     graph: &mut SceneGraph,
     target: NodeId,
     num_dashes: usize,
     dashed_ratio: f64,
 ) -> NodeId {
-    let world = graph.world_transform(target);
-    let (path, style) = {
-        let m = graph.get(target);
-        (m.path.clone(), m.style.clone())
-    };
-    let dashed = geometry::dashed_path(&(world * path), num_dashes, dashed_ratio);
-    graph.add(Mobject::new(dashed).with_style(style).named("dashed"))
+    let leaves = graph.path_leaves(target);
+    if leaves.len() <= 1 {
+        let id = leaves.first().copied().unwrap_or(target);
+        let (dashed, style) = dash_world_path(graph, id, num_dashes, dashed_ratio);
+        return graph.add(Mobject::new(dashed).with_style(style).named("dashed"));
+    }
+    let group = graph.add(Mobject::group().named("dashed"));
+    for leaf in leaves {
+        let (dashed, style) = dash_world_path(graph, leaf, num_dashes, dashed_ratio);
+        graph.add_child(group, Mobject::new(dashed).with_style(style));
+    }
+    group
 }
 
 /// Arc plus a tip (Manim `CurvedArrow`).
@@ -892,6 +936,40 @@ mod tests {
         let sl = geometry::path_length(&g.get(c).path);
         let dl = geometry::path_length(&g.get(d).path);
         assert!(dl < sl, "dashed={dl} solid={sl}");
+        assert_eq!(g.get(d).name.as_deref(), Some("dashed"));
+    }
+
+    #[test]
+    fn add_area_between_is_named_area() {
+        let mut g = SceneGraph::new();
+        let id = add_area_between(
+            &mut g,
+            -1.0,
+            1.0,
+            16,
+            1.0,
+            1.0,
+            |_| 1.0,
+            |_| 0.0,
+            Style::default(),
+        );
+        assert_eq!(g.get(id).name.as_deref(), Some("area"));
+    }
+
+    #[test]
+    fn dashed_copy_of_grouped_lines_has_two_children() {
+        let mut g = SceneGraph::new();
+        let a = g.add(Mobject::new(geometry::line(
+            Point::new(-1.0, 0.0),
+            Point::new(1.0, 0.0),
+        )));
+        let b = g.add(Mobject::new(geometry::line(
+            Point::new(0.0, -1.0),
+            Point::new(0.0, 1.0),
+        )));
+        let group = g.group_nodes(&[a, b]);
+        let d = add_dashed_copy(&mut g, group, 8, 0.5);
+        assert_eq!(g.children_of(d).len(), 2);
         assert_eq!(g.get(d).name.as_deref(), Some("dashed"));
     }
 

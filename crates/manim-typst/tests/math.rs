@@ -224,3 +224,42 @@ fn number_line_labels_count() {
         .unwrap();
     assert_eq!(g.children_of(id).len(), 5);
 }
+
+#[test]
+fn digit_atlas_composes_two_digit_number() {
+    use manim_typst::digit_atlas;
+    let atlas = digit_atlas(&MathOptions::default()).unwrap();
+    let one = atlas.compose(1.0, 0);
+    let twelve = atlas.compose(12.0, 0);
+    let w1 = one.bounding_box().width();
+    let w12 = twelve.bounding_box().width();
+    assert!(
+        w12 > w1,
+        "compose(12, 0) width {w12} should exceed compose(1, 0) {w1}"
+    );
+}
+
+#[test]
+fn complex_plane_labels_include_i() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_complex_plane_labels;
+    let mut g = SceneGraph::new();
+    let id = add_complex_plane_labels(
+        &mut g,
+        -1.0,
+        1.0,
+        1.0,
+        -1.0,
+        1.0,
+        1.0,
+        1.0,
+        false,
+        &MathOptions::default(),
+    )
+    .unwrap();
+    assert!(
+        g.children_of(id).len() >= 4,
+        "expected real ticks plus i/-i, got {}",
+        g.children_of(id).len()
+    );
+}

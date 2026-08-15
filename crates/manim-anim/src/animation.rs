@@ -8,7 +8,7 @@ use kurbo::{Affine, BezPath, Point, Vec2};
 use manim_core::geometry;
 use manim_core::peniko::Color;
 use manim_core::style::lerp_color;
-use manim_core::{NodeId, SceneGraph};
+use manim_core::{DigitAtlas, NodeId, SceneGraph};
 
 use crate::easing::Easing;
 
@@ -66,6 +66,14 @@ pub enum AnimationKind {
         about: Point,
         angle: f64,
     },
+    /// Rebuild a decimal from a baked glyph atlas (Manim `ChangingDecimal`).
+    /// Typst runs at authoring time; the frame loop only concatenates outlines.
+    ChangingDecimal {
+        from: f64,
+        to: f64,
+        places: usize,
+        atlas: DigitAtlas,
+    },
 }
 
 /// The scene property an animation drives. Animations are grouped by
@@ -87,7 +95,8 @@ impl AnimationKind {
             | AnimationKind::Uncreate { .. }
             | AnimationKind::Morph { .. }
             | AnimationKind::DrawBorderThenFill { .. }
-            | AnimationKind::ShowPassingFlash { .. } => Prop::Path,
+            | AnimationKind::ShowPassingFlash { .. }
+            | AnimationKind::ChangingDecimal { .. } => Prop::Path,
             AnimationKind::FadeIn { .. } | AnimationKind::FadeOut { .. } => Prop::Opacity,
             AnimationKind::Shift { .. }
             | AnimationKind::Scale { .. }
@@ -295,6 +304,27 @@ impl Animation {
         )
     }
 
+    pub fn changing_decimal(
+        target: NodeId,
+        from: f64,
+        to: f64,
+        places: usize,
+        atlas: DigitAtlas,
+        duration: f64,
+    ) -> Self {
+        Self::new(
+            target,
+            AnimationKind::ChangingDecimal {
+                from,
+                to,
+                places,
+                atlas,
+            },
+            0.0,
+            duration,
+        )
+    }
+
     pub fn wiggle(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
         let from = scene.get(target).transform;
         let about = scene.local_pivot(target);
@@ -425,6 +455,15 @@ impl Animation {
                     * Affine::scale(alpha)
                     * Affine::translate(-about.to_vec2());
                 scene.get_mut(self.target).transform = *from * rot * scale;
+            }
+            AnimationKind::ChangingDecimal {
+                from,
+                to,
+                places,
+                atlas,
+            } => {
+                let v = from + (to - from) * alpha;
+                scene.get_mut(self.target).path = atlas.compose(v, *places);
             }
         }
     }

@@ -660,4 +660,23 @@ mod tests {
             "t1={t1:?}"
         );
     }
+
+    #[test]
+    fn changing_decimal_widens_as_value_grows() {
+        let mut atlas = manim_core::DigitAtlas::default();
+        for ch in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-'] {
+            atlas.insert(ch, geometry::rect(Point::new(0.2, 0.3), 0.4, 0.6), 0.45);
+        }
+        let mut scene = Scene::new();
+        let id = scene.add(Mobject::new(atlas.compose(1.0, 0)));
+        scene.play([
+            Animation::changing_decimal(id, 1.0, 12.0, 0, atlas, 1.0).with_easing(Easing::Linear),
+        ]);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let w0 = geometry::path_length(&sim.get(id).path);
+        scene.timeline.apply(&mut sim, 1.0);
+        let w1 = geometry::path_length(&sim.get(id).path);
+        assert!(w1 > w0, "start={w0} end={w1}");
+    }
 }

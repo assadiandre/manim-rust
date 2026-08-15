@@ -382,6 +382,27 @@ pub fn area_under(
     p
 }
 
+/// Region between `f` and `g` on `[x_min, x_max]`, closed.
+pub fn area_between(
+    x_min: f64,
+    x_max: f64,
+    samples: usize,
+    unit_x: f64,
+    unit_y: f64,
+    f: impl Fn(f64) -> f64,
+    g: impl Fn(f64) -> f64,
+) -> BezPath {
+    let n = samples.max(2);
+    let mut p = plot(x_min, x_max, samples, unit_x, unit_y, f);
+    for i in 0..n {
+        let t = i as f64 / (n - 1) as f64;
+        let x = x_max + (x_min - x_max) * t;
+        p.line_to(Point::new(x * unit_x, g(x) * unit_y));
+    }
+    p.close_path();
+    p
+}
+
 /// ManimCE `DashedVMobject`: `num_dashes` equal arc-length windows, each
 /// keeping the first `dashed_ratio` fraction (clamped to `0.05..=0.95`).
 pub fn dashed_path(path: &BezPath, num_dashes: usize, dashed_ratio: f64) -> BezPath {

@@ -24,7 +24,7 @@ use std::sync::{LazyLock, Mutex};
 use kurbo::{Affine, BezPath, Point, Shape, Size as KSize};
 use manim_core::kurbo;
 use manim_core::peniko::Color;
-use manim_core::{Mobject, Style};
+use manim_core::{DigitAtlas, Mobject, Style};
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::layout::{Frame, FrameItem};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
@@ -796,4 +796,109 @@ pub fn add_axes_labels(
         )?);
     }
     Ok(scene.group_nodes(&ids))
+}
+
+const ATLAS_CHARS: &[char] = &[
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '-', '+',
+];
+
+/// Compile one atlas character through Typst text. `-` and `+` are escaped
+/// so Typst does not treat them as list markers.
+fn atlas_char_source(ch: char) -> String {
+    match ch {
+        '-' | '+' => format!("\\{ch}"),
+        _ => ch.to_string(),
+    }
+}
+
+fn union_glyph_paths(parts: &[Mobject]) -> BezPath {
+    let mut out = BezPath::new();
+    for m in parts {
+        out.extend((m.transform * m.path.clone()).iter());
+    }
+    out
+}
+
+/// Local builder: one `(char, outline, advance)` triple per atlas glyph.
+fn digit_atlas_glyphs(
+    options: &MathOptions,
+) -> Result<Vec<(char, BezPath, f64)>, TypstError> {
+    let mut glyphs = Vec::with_capacity(ATLAS_CHARS.len());
+    for &ch in ATLAS_CHARS {
+        let parts = text_mobjects(&atlas_char_source(ch), options)?;
+        let path = union_glyph_paths(&parts);
+        let width = path.bounding_box().width().max(0.04) + 0.03;
+        glyphs.push((ch, path, width));
+    }
+    Ok(glyphs)
+}
+
+/// Bake `0-9`, `.`, `-`, `+` outlines for [`DigitAtlas::compose`].
+pub fn digit_atlas(options: &MathOptions) -> Result<DigitAtlas, TypstError> {
+    let mut atlas = DigitAtlas::default();
+    for (ch, path, width) in digit_atlas_glyphs(options)? {
+        atlas.insert(ch, path, width);
+    }
+    Ok(atlas)
+}
+
+/// Single composed-path decimal (Manim `ChangingDecimal` static frame).
+pub fn add_decimal_atlas(
+    scene: &mut manim_core::SceneGraph,
+    value: f64,
+    places: usize,
+    atlas: &DigitAtlas,
+    options: &MathOptions,
+) -> manim_core::NodeId {
+    let path = atlas.compose(value, places);
+    let fill = options.color.unwrap_or_else(palette_white);
+    let style = Style::default().no_stroke().with_fill(fill);
+    scene.add(Mobject::new(path).with_style(style).named("decimal"))
+}
+
+fn format_imag_unit(y: f64) -> String {
+    if (y - 1.0).abs() < 1e-9 {
+        "i".into()
+    } else if (y + 1.0).abs() < 1e-9 {
+        "-i".into()
+    } else if y.fract().abs() < 1e-9 {
+        format!("{}i", y as i64)
+    } else {
+        format!("{y:.1}i")
+    }
+}
+
+/// Tick labels for a complex plane: real decimals on x, CE-style `i` on y.
+pub fn add_complex_plane_labels(
+    scene: &mut manim_core::SceneGraph,
+    x_min: f64,
+    x_max: f64,
+    x_step: f64,
+    y_min: f64,
+    y_max: f64,
+    y_step: f64,
+    unit_size: f64,
+    include_tip: bool,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let mut ids = Vec::new();
+    for x in number_line_ticks(x_min, x_max, x_step, include_tip) {
+        ids.push(add_tick_label(
+            scene,
+            x,
+            Point::new(x * unit_size, -0.35),
+            options,
+        )?);
+    }
+    for y in number_line_ticks(y_min, y_max, y_step, include_tip) {
+        if y.abs() < 1e-9 {
+            continue;
+        }
+        let id = add_text(scene, &format_imag_unit(y), options)?;
+        scene.move_to(id, Point::new(-0.45, y * unit_size));
+        ids.push(id);
+    }
+    let group = scene.group_nodes(&ids);
+    scene.get_mut(group).name = Some("complex_labels".into());
+    Ok(group)
 }
