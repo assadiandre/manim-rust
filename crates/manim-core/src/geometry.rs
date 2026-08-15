@@ -249,6 +249,33 @@ pub fn star(center: Point, n: usize, outer: f64, inner: Option<f64>, rotation: f
     polygon(&pts)
 }
 
+/// Closed shape whose sides are circular arcs of signed sweep `arc_angle`
+/// (ManimCE `ArcPolygon`). `|arc_angle| < 1e-9` yields straight sides.
+pub fn arc_polygon(vertices: &[Point], arc_angle: f64) -> BezPath {
+    let mut path = BezPath::new();
+    if vertices.is_empty() {
+        return path;
+    }
+    path.move_to(vertices[0]);
+    let n = vertices.len();
+    for i in 0..n {
+        let a = vertices[i];
+        let b = vertices[(i + 1) % n];
+        append_arc_side(&mut path, a, b, arc_angle);
+    }
+    path.close_path();
+    path
+}
+
+fn append_arc_side(path: &mut BezPath, a: Point, b: Point, theta: f64) {
+    for el in arc_between_points(a, b, theta) {
+        match el {
+            PathEl::MoveTo(_) | PathEl::ClosePath => {}
+            other => path.push(other),
+        }
+    }
+}
+
 /// Circular arc from `start` to `end` with signed sweep (Manim `ArcBetweenPoints`).
 pub fn arc_between_points(start: Point, end: Point, sweep: f64) -> BezPath {
     if sweep.abs() < 1e-9 {
@@ -761,6 +788,42 @@ mod tests {
         assert!(
             path.is_empty(),
             "constant-positive field should emit no segments"
+        );
+    }
+
+    fn unit_square_verts() -> [Point; 4] {
+        [
+            Point::new(-1.0, -1.0),
+            Point::new(1.0, -1.0),
+            Point::new(1.0, 1.0),
+            Point::new(-1.0, 1.0),
+        ]
+    }
+
+    #[test]
+    fn arc_polygon_zero_angle_matches_square() {
+        let path = arc_polygon(&unit_square_verts(), 0.0);
+        let (_, closed) = flatten_points(&path);
+        assert!(closed, "arc_polygon must emit ClosePath");
+        let bb = bounding_box(&path);
+        assert!(
+            (bb.x0 + 1.0).abs() < 1e-6
+                && (bb.x1 - 1.0).abs() < 1e-6
+                && (bb.y0 + 1.0).abs() < 1e-6
+                && (bb.y1 - 1.0).abs() < 1e-6,
+            "straight square bbox should be [-1, 1]^2, got {bb:?}"
+        );
+    }
+
+    #[test]
+    fn arc_polygon_quarter_arcs_bulge_out() {
+        let verts = unit_square_verts();
+        let straight = bounding_box(&arc_polygon(&verts, 0.0));
+        let bulged = bounding_box(&arc_polygon(&verts, std::f64::consts::FRAC_PI_2));
+        assert!(
+            bulged.width() > straight.width() + 0.2
+                && bulged.height() > straight.height() + 0.2,
+            "θ=π/2 should bulge past the square, straight={straight:?} bulged={bulged:?}"
         );
     }
 }

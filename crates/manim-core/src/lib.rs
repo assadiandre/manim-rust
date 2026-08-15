@@ -14,6 +14,7 @@ pub mod decimal;
 pub mod geometry;
 pub mod layout;
 pub mod mobject;
+pub mod raster;
 pub mod scene;
 pub mod style;
 mod svg;
@@ -26,7 +27,7 @@ pub use constants::{
     FRAME_X_RADIUS, FRAME_Y_RADIUS, LEFT, MED_SMALL_BUFF, ORIGIN, PI, RIGHT, TAU, UL, UP, UR,
 };
 pub use construct::{
-    add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes,
+    add_angle, add_arc_polygon, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes,
     add_background_rect, add_bar_chart, add_brace, add_complex_plane, add_cross, add_curved_arrow,
     add_curved_double_arrow, add_dashed_copy, add_dot, add_double_arrow, add_graph,
     add_implicit_curve, add_number_line, add_number_plane, add_polar_plane, add_riemann_rects,
@@ -37,6 +38,9 @@ pub use construct::{
 };
 pub use decimal::DigitAtlas;
 pub use mobject::Mobject;
+pub use raster::{
+    add_raster, checkerboard, raster_from_bytes, raster_from_path, raster_from_rgba, RasterError,
+};
 pub use scene::{NodeId, SceneGraph};
 pub use style::{lerp_color, palette, Style};
 pub use svg::{add_svg, svg_mobjects, SvgError};

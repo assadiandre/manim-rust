@@ -134,4 +134,7 @@ crates/
 - M25 ImplicitFunction via marching squares (Python `f(x,y)` sampled once);
   FadeTransform stretch as a single Travel (shift+scale) animation;
   ApplyWave as compiled path data that rests at the endpoints.
+- M26 ImageMobject: authoring-time RGBA decode onto the mobject; vello
+  `draw_image` at encode time (no per-frame Python, no extra GPU API).
+  ArcPolygon sides are circular arcs baked into a `BezPath`.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

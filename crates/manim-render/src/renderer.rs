@@ -4,9 +4,9 @@
 //! nodes, `render_frame` returns the previous frame's pixels without touching
 //! the GPU.
 
-use manim_core::{Camera, OrthoCamera2D, SceneGraph};
-use vello::kurbo::Stroke;
-use vello::peniko::{Color, Fill};
+use manim_core::{geometry, Camera, OrthoCamera2D, SceneGraph};
+use vello::kurbo::{Affine, Stroke};
+use vello::peniko::{Color, Fill, ImageBrush, ImageQuality};
 use vello::wgpu;
 use vello::{AaConfig, RenderParams, RendererOptions, Scene as VelloScene};
 
@@ -147,6 +147,23 @@ impl Renderer {
                 continue;
             }
             let t = camera_t * world;
+            if let Some(img) = &m.image {
+                if img.width > 0 && img.height > 0 {
+                    let bb = geometry::bounding_box(&m.path);
+                    if bb.width() > 0.0 && bb.height() > 0.0 {
+                        // Image space is y-down from the top-left; logical is y-up.
+                        let local = Affine::translate((bb.x0, bb.y1))
+                            * Affine::scale_non_uniform(
+                                bb.width() / img.width as f64,
+                                -bb.height() / img.height as f64,
+                            );
+                        let brush = ImageBrush::new(img.clone())
+                            .with_quality(ImageQuality::Low)
+                            .with_alpha(opacity);
+                        vs.draw_image(&brush, t * local);
+                    }
+                }
+            }
             // `opacity` already includes this node's own style.opacity, so
             // use the per-paint opacities directly rather than effective_*.
             if let Some(fill) = m.style.fill {

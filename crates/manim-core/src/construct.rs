@@ -776,6 +776,20 @@ pub fn add_right_angle(
     )
 }
 
+/// Closed arc-sided polygon (ManimCE `ArcPolygon`).
+pub fn add_arc_polygon(
+    graph: &mut SceneGraph,
+    vertices: &[Point],
+    arc_angle: f64,
+    style: Style,
+) -> NodeId {
+    graph.add(
+        Mobject::new(geometry::arc_polygon(vertices, arc_angle))
+            .with_style(style)
+            .named("arc_polygon"),
+    )
+}
+
 #[derive(Clone, Debug)]
 pub struct PolarPlaneOpts {
     pub radius: f64,
@@ -1549,5 +1563,22 @@ mod tests {
             Style::default(),
         );
         assert_eq!(g.get(id).name.as_deref(), Some("implicit"));
+    }
+
+    #[test]
+    fn add_arc_polygon_is_named() {
+        let mut g = SceneGraph::new();
+        let id = add_arc_polygon(
+            &mut g,
+            &[
+                Point::new(-1.0, -1.0),
+                Point::new(1.0, -1.0),
+                Point::new(1.0, 1.0),
+                Point::new(-1.0, 1.0),
+            ],
+            std::f64::consts::FRAC_PI_2,
+            Style::default(),
+        );
+        assert_eq!(g.get(id).name.as_deref(), Some("arc_polygon"));
     }
 }

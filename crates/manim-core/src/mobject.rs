@@ -1,4 +1,5 @@
 use kurbo::{Affine, BezPath, Vec2};
+use peniko::ImageData;
 
 use crate::style::Style;
 
@@ -7,6 +8,9 @@ use crate::style::Style;
 /// Hierarchies live in `SceneGraph` (arena); a `Mobject` with an empty path
 /// acts as a group when given children there. Kept deliberately plain-data so
 /// animations can snapshot and restore state cheaply.
+///
+/// Optional `image` is authoring-time raster (Manim `ImageMobject`). The path
+/// is then the layout rectangle; vello samples the pixels at encode time.
 #[derive(Clone, Debug)]
 pub struct Mobject {
     pub name: Option<String>,
@@ -16,6 +20,7 @@ pub struct Mobject {
     pub visible: bool,
     /// Higher draws later (on top). Manim `z_index`.
     pub z_index: i32,
+    pub image: Option<ImageData>,
 }
 
 impl Mobject {
@@ -27,7 +32,13 @@ impl Mobject {
             transform: Affine::IDENTITY,
             visible: true,
             z_index: 0,
+            image: None,
         }
+    }
+
+    pub fn with_image(mut self, image: ImageData) -> Self {
+        self.image = Some(image);
+        self
     }
 
     /// Empty-path node used purely as a transform/style parent.

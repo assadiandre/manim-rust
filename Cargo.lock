@@ -1997,6 +1997,7 @@ name = "manim-core"
 version = "0.1.0"
 dependencies = [
  "i_overlay",
+ "image",
  "kurbo",
  "peniko",
  "usvg 0.48.1",
