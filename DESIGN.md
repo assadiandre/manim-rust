@@ -139,4 +139,6 @@ crates/
   ArcPolygon sides are circular arcs baked into a `BezPath`.
 - M27 SVG `<image>` rasters (data-URI PNG/JPEG/GIF/WebP via usvg) and
   `save_state` / `Restore` as compiled transform+style+path data.
+- M28 `become` copies path/style/raster onto another node and keeps
+  the original transform (authoring-time, no per-frame Python).
 - M8 (later) 3D spike: cube pass composited under 2D overlay

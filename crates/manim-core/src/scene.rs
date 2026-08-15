@@ -266,6 +266,21 @@ impl SceneGraph {
     pub fn saved_state(&self, id: NodeId) -> Option<&Mobject> {
         self.nodes[id].saved.as_ref()
     }
+
+    /// Copy `other`'s path, style, and raster onto `id` (Manim `become`).
+    /// Keeps `id`'s world center, name, visibility, and z-index.
+    pub fn become_mobject(&mut self, id: NodeId, other: NodeId) {
+        let stay = self.center_of(id);
+        let path = self.get(other).path.clone();
+        let style = self.get(other).style.clone();
+        let image = self.get(other).image.clone();
+        let m = self.get_mut(id);
+        m.path = path;
+        m.style = style;
+        m.image = image;
+        m.transform = Affine::IDENTITY;
+        self.move_to(id, stay);
+    }
 }
 
 #[cfg(test)]
@@ -343,5 +358,21 @@ mod tests {
         g2.restore(d);
         let after = g2.center_of(d);
         assert!((after.x - before.x).abs() < 1e-9 && (after.y - before.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn become_copies_path_and_keeps_center() {
+        let mut g = SceneGraph::new();
+        let a = g.add(
+            Mobject::new(geometry::circle(kurbo::Point::new(-2.0, 0.0), 0.4))
+                .with_style(crate::style::Style::filled(crate::palette::red())),
+        );
+        let b = g.add(Mobject::new(geometry::square(kurbo::Point::ORIGIN, 2.0)));
+        let c0 = g.center_of(a);
+        let w_sq = g.bounding_box(b).width();
+        g.become_mobject(a, b);
+        let c1 = g.center_of(a);
+        assert!((c1.x - c0.x).abs() < 0.05 && (c1.y - c0.y).abs() < 0.05);
+        assert!((g.bounding_box(a).width() - w_sq).abs() < 0.05);
     }
 }
