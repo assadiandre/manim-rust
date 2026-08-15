@@ -8,10 +8,12 @@ use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
     add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace,
     add_complex_plane,
-    add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_graph, add_number_line,
+    add_boolean, add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_graph, add_number_line,
+    add_svg,
     add_number_plane, add_polar_plane, add_riemann_rects, add_right_angle, add_surrounding_rect,
     add_tangent_line, add_underline, add_vertical_line_to_graph, geometry, layout_graph, palette,
-    AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
+    AxesOpts, BooleanOp, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample,
+    Style,
 };
 use manim_typst::{
     add_bar_chart_labeled, add_bulleted_list, add_code, add_complex_plane_labels, add_decimal,
@@ -1207,6 +1209,65 @@ pub fn probes() -> Vec<Probe> {
         Style::default().with_stroke(palette::teal(), 3.0),
     );
     out.push(probe("tangent", s, &[0.0]));
+
+    // SVG import: colored shapes parsed once into path groups
+    let mut s = Scene::new();
+    add_svg(
+        &mut s.graph,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60">
+            <circle cx="28" cy="30" r="22" fill="#58C4DD"/>
+            <rect x="50" y="10" width="42" height="40" rx="6" fill="#83C167"/>
+            <polygon points="18,52 50,6 82,52" fill="#FC6255" fill-opacity="0.9"/>
+        </svg>"##,
+        3.2,
+    )
+    .expect("svg");
+    out.push(probe("svg", s, &[0.0]));
+
+    // Boolean ops: union / intersection / difference of overlapping circles
+    let mut s = Scene::new();
+    let mk = |s: &mut Scene, c: kurbo::Point| {
+        s.add(
+            Mobject::new(geometry::circle(c, 0.95))
+                .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 2.0)),
+        )
+    };
+    let a = mk(&mut s, Point::new(-3.4, 0.0));
+    let b = mk(&mut s, Point::new(-2.4, 0.0));
+    add_boolean(
+        &mut s.graph,
+        a,
+        b,
+        BooleanOp::Union,
+        Style::filled(palette::teal()).with_stroke(palette::white(), 3.0),
+    );
+    s.graph.get_mut(a).visible = false;
+    s.graph.get_mut(b).visible = false;
+
+    let c = mk(&mut s, Point::new(-0.4, 0.0));
+    let d = mk(&mut s, Point::new(0.4, 0.0));
+    add_boolean(
+        &mut s.graph,
+        c,
+        d,
+        BooleanOp::Intersection,
+        Style::filled(palette::yellow()).with_stroke(palette::white(), 3.0),
+    );
+    s.graph.get_mut(c).visible = false;
+    s.graph.get_mut(d).visible = false;
+
+    let e = mk(&mut s, Point::new(2.6, 0.0));
+    let f = mk(&mut s, Point::new(3.4, 0.0));
+    add_boolean(
+        &mut s.graph,
+        e,
+        f,
+        BooleanOp::Difference,
+        Style::filled(palette::red()).with_stroke(palette::white(), 3.0),
+    );
+    s.graph.get_mut(e).visible = false;
+    s.graph.get_mut(f).visible = false;
+    out.push(probe("boolean", s, &[0.0]));
 
     out
 }

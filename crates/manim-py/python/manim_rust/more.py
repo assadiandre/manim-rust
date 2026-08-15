@@ -293,3 +293,58 @@ class BraceLabel(Mobject):
             dir_name(self.direction),
             font_size_pt=self.font_size,
         )
+
+
+class SVGMobject(VMobject):
+    """Parse SVG once at authoring time into path groups (no Typst round-trip)."""
+
+    def __init__(self, file_name=None, file_path=None, svg_string=None, height=2.0, **kwargs):
+        super().__init__(**kwargs)
+        self.file_name = file_name or file_path
+        self.svg_string = svg_string
+        self.height = height
+
+    def _add(self, raw):
+        src = self.svg_string
+        if src is None:
+            if not self.file_name:
+                raise ValueError("SVGMobject needs file_name or svg_string")
+            with open(self.file_name, encoding="utf-8") as f:
+                src = f.read()
+        return raw.add_svg(src, height=self.height)
+
+
+class _BooleanVMobject(VMobject):
+    op = "union"
+
+    def __init__(self, mobject1, mobject2, **kwargs):
+        super().__init__(**kwargs)
+        self.mobject1 = mobject1
+        self.mobject2 = mobject2
+
+    def _add(self, raw):
+        fill, stroke, width = self._style()
+        return raw.add_boolean(
+            _node_id(self.mobject1, raw),
+            _node_id(self.mobject2, raw),
+            self.op,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
+class Union(_BooleanVMobject):
+    op = "union"
+
+
+class Difference(_BooleanVMobject):
+    op = "difference"
+
+
+class Intersection(_BooleanVMobject):
+    op = "intersection"
+
+
+class Exclusion(_BooleanVMobject):
+    op = "exclusion"

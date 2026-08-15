@@ -26,9 +26,10 @@ use manim_core::{
     add_number_line as rust_add_number_line, add_number_plane as rust_add_number_plane,
     add_polar_plane as rust_add_polar_plane, add_riemann_rects as rust_add_riemann_rects,
     add_right_angle as rust_add_right_angle, add_surrounding_rect as rust_add_surrounding_rect,
+    add_boolean as rust_add_boolean, add_svg as rust_add_svg,
     add_tangent_line as rust_add_tangent_line, add_underline as rust_add_underline,
     add_vector as rust_add_vector, add_vertical_line_to_graph as rust_add_vertical_line_to_graph,
-    geometry, palette,
+    geometry, palette, BooleanOp,
     AxesOpts, Mobject, NodeId, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample,
     Style,
 };
@@ -389,6 +390,31 @@ impl PyScene {
             y0,
             style,
         ))
+    }
+
+    #[pyo3(signature = (source, height = 2.0))]
+    fn add_svg(&mut self, source: &str, height: f64) -> PyResult<usize> {
+        rust_add_svg(&mut self.scene.graph, source, height)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (a, b, op, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_boolean(
+        &mut self,
+        a: NodeId,
+        b: NodeId,
+        op: &str,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let kind = BooleanOp::parse(op).ok_or_else(|| {
+            PyValueError::new_err(format!(
+                "unknown boolean op {op:?} (union/intersection/difference/exclusion)"
+            ))
+        })?;
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_boolean(&mut self.scene.graph, a, b, kind, style))
     }
 
     #[pyo3(signature = (x = 0.0, y = 0.0, width = 3.0, height = 2.0, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
