@@ -158,7 +158,7 @@ impl Renderer {
                                 -bb.height() / img.height as f64,
                             );
                         let brush = ImageBrush::new(img.clone())
-                            .with_quality(ImageQuality::Low)
+                            .with_quality(ImageQuality::Medium)
                             .with_alpha(opacity);
                         vs.draw_image(&brush, t * local);
                     }

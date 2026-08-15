@@ -376,6 +376,31 @@ impl Animation {
 
     /// Interpolate from the *current* path/transform/style to the last
     /// `save_state` snapshot. If none was saved, `from` and `to` match.
+    /// CE `TransformFromCopy`: animate `target` from looking like `source`
+    /// to its own current path/transform/style. Source is not mutated.
+    pub fn transform_from_copy(
+        scene: &SceneGraph,
+        source: NodeId,
+        target: NodeId,
+        duration: f64,
+    ) -> Self {
+        let src = scene.get(source);
+        let dst = scene.get(target);
+        Self::new(
+            target,
+            AnimationKind::Restore {
+                from_path: src.path.clone(),
+                to_path: dst.path.clone(),
+                from_transform: src.transform,
+                to_transform: dst.transform,
+                from_style: src.style.clone(),
+                to_style: dst.style.clone(),
+            },
+            0.0,
+            duration,
+        )
+    }
+
     pub fn restore(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
         let (from_path, from_transform, from_style) = {
             let m = scene.get(target);
@@ -644,17 +669,52 @@ fn wave_path(full: &BezPath, amplitude: f64, ripples: f64, alpha: f64) -> BezPat
     if pts.len() < 2 {
         return full.clone();
     }
-    let env = (std::f64::consts::PI * alpha).sin();
-    let n = pts.len();
-    let denom = (n - 1) as f64;
+    // CE ApplyWave homotopy: a window of width `time_width` travels in x.
+    let time_width = 1.0;
+    let upper = alpha * (1.0 + time_width);
+    let lower = upper - time_width;
+    let span = (upper - lower).max(1e-9);
+    let x_min = pts.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let x_max = pts.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+    let x_span = (x_max - x_min).max(1e-9);
     let waved: Vec<Point> = pts
         .iter()
-        .enumerate()
-        .map(|(i, p)| {
-            let s = i as f64 / denom;
-            let o = amplitude * env * (std::f64::consts::TAU * ripples * s).sin();
+        .map(|p| {
+            let relative_x = (p.x - x_min) / x_span;
+            let phase = (relative_x - lower) / span;
+            let o = amplitude * ce_wave(phase, ripples);
             Point::new(p.x, p.y + o)
         })
         .collect();
     geometry::points_to_path(&waved, closed)
+}
+
+/// ManimCE `rate_functions.smooth` (sigmoid), used as ApplyWave's flank.
+fn ce_smooth(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    let inflection = 10.0;
+    let sigmoid = |x: f64| 1.0 / (1.0 + (-x).exp());
+    let error = sigmoid(-inflection / 2.0);
+    ((sigmoid(inflection * (t - 0.5)) - error) / (1.0 - 2.0 * error)).clamp(0.0, 1.0)
+}
+
+/// ManimCE `ApplyWave.wave`: ripples of alternating sign, zero outside [0, 1].
+fn ce_wave(phase: f64, ripples: f64) -> f64 {
+    let t = 1.0 - phase;
+    if !(0.0..=1.0).contains(&t) || t == 0.0 || t == 1.0 {
+        return 0.0;
+    }
+    let ripples = ripples.max(1.0);
+    let phases = ripples * 2.0;
+    let phase_i = (t * phases).floor() as i32;
+    if phase_i == 0 {
+        return ce_smooth(t * phases);
+    }
+    if phase_i as f64 >= phases - 1.0 {
+        let t = t - phase_i as f64 / phases;
+        return (1.0 - ce_smooth(t * phases)) * (2.0 * (ripples as i32 % 2) as f64 - 1.0);
+    }
+    let p = (phase_i - 1) / 2;
+    let t = t - (2 * p + 1) as f64 / phases;
+    (1.0 - 2.0 * ce_smooth(t * ripples)) * (1.0 - 2.0 * (p % 2) as f64)
 }

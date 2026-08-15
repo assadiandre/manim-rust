@@ -418,9 +418,8 @@ impl Scene {
     /// in while traveling from the source (Manim `FadeTransform`).
     ///
     /// Stretch uses a single `Travel` animation (shift+scale) so it does not
-    /// fight `Prop::Transform`. The target is moved to the source center and
-    /// scaled to the source extent first; `apply_final` restores dest size
-    /// and position.
+    /// fight `Prop::Transform`. A dest copy starts at the source pose;
+    /// the original dest stays put (CE `Group(source, target.copy())`).
     pub fn fade_transform_anims(
         &mut self,
         source: NodeId,
@@ -438,12 +437,15 @@ impl Scene {
         let fade_out = Animation::fade_out(&self.graph, source, duration);
         let travel_src = Animation::travel(&self.graph, source, delta, src_to_dst, duration);
 
-        self.graph.move_to(target, src_c);
-        self.graph.scale_about_center(target, dst_to_src);
+        // CE FadeTransform animates Group(source, target.copy()). The original
+        // target stays put if it was already in the scene.
+        let ghost = self.graph.add(self.graph.get(target).clone());
+        self.graph.move_to(ghost, src_c);
+        self.graph.scale_about_center(ghost, dst_to_src);
 
-        let fade_in = Animation::fade_in(&self.graph, target, duration);
-        let travel_dst = Animation::travel(&self.graph, target, delta, src_to_dst, duration);
-        vec![fade_out, travel_src, fade_in, travel_dst]
+        let fade_in = Animation::fade_in(&self.graph, ghost, duration);
+        let travel_ghost = Animation::travel(&self.graph, ghost, delta, src_to_dst, duration);
+        vec![fade_out, travel_src, fade_in, travel_ghost]
     }
 
     pub fn play_fade_transform(&mut self, source: NodeId, target: NodeId, duration: f64) {
@@ -451,7 +453,7 @@ impl Scene {
         self.play(anims);
     }
 
-    /// Standing wave along the path (Manim `ApplyWave`).
+    /// Traveling wave along x (Manim `ApplyWave`).
     pub fn play_apply_wave(&mut self, target: NodeId, duration: f64) {
         self.play([Animation::apply_wave(&self.graph, target, 0.25, 2.0, duration)]);
     }
@@ -459,6 +461,38 @@ impl Scene {
     /// Animate from the current state back to the last `save_state` snapshot.
     pub fn play_restore(&mut self, target: NodeId, duration: f64) {
         self.play([Animation::restore(&self.graph, target, duration)]);
+    }
+
+    pub fn play_transform_from_copy(&mut self, source: NodeId, target: NodeId, duration: f64) {
+        self.play([Animation::transform_from_copy(
+            &self.graph, source, target, duration,
+        )]);
+    }
+
+    /// CE `Broadcast`: lagged copies grow from a point and fade out.
+    pub fn broadcast_anims(&mut self, target: NodeId, duration: f64) -> Vec<Animation> {
+        let n = 5usize;
+        let lag = 0.2;
+        let each = duration / (1.0 + (n - 1) as f64 * lag);
+        let proto = self.graph.get(target).clone();
+        let mut anims = Vec::with_capacity(n);
+        for i in 0..n {
+            let id = self.graph.add(proto.clone());
+            self.graph.move_to(id, manim_core::kurbo::Point::ORIGIN);
+            self.graph.set_opacity(id, 0.0);
+            self.graph.save_state(id);
+            self.graph.scale_about_center(id, 0.02);
+            self.graph.set_opacity(id, 1.0);
+            let mut a = Animation::restore(&self.graph, id, each);
+            a.start = i as f64 * each * lag;
+            anims.push(a);
+        }
+        anims
+    }
+
+    pub fn play_broadcast(&mut self, target: NodeId, duration: f64) {
+        let anims = self.broadcast_anims(target, duration);
+        self.play(anims);
     }
 
     pub fn duration(&self) -> f64 {
@@ -973,44 +1007,53 @@ mod tests {
     }
 
     #[test]
-    fn fade_transform_hides_source_shows_target() {
+    fn fade_transform_hides_source_shows_ghost() {
         let mut scene = Scene::new();
         let source = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.5)));
         let target = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.5)));
         scene.play_fade_transform(source, target, 1.0);
+        let ghost = scene.graph.len() - 1;
 
         let mut sim = scene.graph.clone();
         scene.timeline.apply(&mut sim, 0.0);
         assert!((sim.get(source).style.opacity - 1.0).abs() < 1e-6);
-        assert_eq!(sim.get(target).style.opacity, 0.0);
+        assert!((sim.get(target).style.opacity - 1.0).abs() < 1e-6);
+        assert_eq!(sim.get(ghost).style.opacity, 0.0);
 
         scene.timeline.apply(&mut sim, 1.0);
         assert_eq!(sim.get(source).style.opacity, 0.0);
         assert!((sim.get(target).style.opacity - 1.0).abs() < 1e-6);
+        assert!((sim.get(ghost).style.opacity - 1.0).abs() < 1e-6);
     }
 
     #[test]
-    fn fade_transform_target_travels() {
+    fn fade_transform_ghost_travels_target_stays() {
         let mut scene = Scene::new();
         let source = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.5)));
         let target = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.5)));
         let src_start = scene.graph.center_of(source);
         let dst_end = scene.graph.center_of(target);
         scene.play_fade_transform(source, target, 1.0);
+        let ghost = scene.graph.len() - 1;
 
         let mut sim = scene.graph.clone();
         scene.timeline.apply(&mut sim, 0.0);
+        let g0 = sim.center_of(ghost);
+        assert!(
+            (g0.x - src_start.x).abs() < 0.05 && (g0.y - src_start.y).abs() < 0.05,
+            "ghost t0={g0:?}"
+        );
         let t0 = sim.center_of(target);
         assert!(
-            (t0.x - src_start.x).abs() < 0.05 && (t0.y - src_start.y).abs() < 0.05,
-            "t0={t0:?}"
+            (t0.x - dst_end.x).abs() < 0.05 && (t0.y - dst_end.y).abs() < 0.05,
+            "target should stay, t0={t0:?}"
         );
 
         scene.timeline.apply(&mut sim, 1.0);
-        let t1 = sim.center_of(target);
+        let g1 = sim.center_of(ghost);
         assert!(
-            (t1.x - dst_end.x).abs() < 0.05 && (t1.y - dst_end.y).abs() < 0.05,
-            "t1={t1:?}"
+            (g1.x - dst_end.x).abs() < 0.05 && (g1.y - dst_end.y).abs() < 0.05,
+            "ghost t1={g1:?}"
         );
     }
 
@@ -1199,11 +1242,12 @@ mod tests {
         scene.play_fade_transform(source, target, 1.0);
         let mut sim = scene.graph.clone();
         scene.timeline.apply(&mut sim, 0.5);
+        let ghost = scene.graph.len() - 1;
         let a = sim.center_of(source);
-        let b = sim.center_of(target);
+        let b = sim.center_of(ghost);
         assert!(
             (a.x - b.x).abs() < 0.12 && (a.y - b.y).abs() < 0.12,
-            "mid source={a:?} target={b:?}"
+            "mid source={a:?} ghost={b:?}"
         );
     }
 
@@ -1266,5 +1310,39 @@ mod tests {
         let p1 = sim.center_of(c);
         assert!((p1.x - saved_c.x).abs() < 0.05 && (p1.y - saved_c.y).abs() < 0.05);
         assert!((sim.get(c).style.opacity - saved_o).abs() < 1e-6);
+    }
+
+    #[test]
+    fn transform_from_copy_leaves_source_and_ends_at_target() {
+        let mut scene = Scene::new();
+        let src = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.4)));
+        let dst = scene.add(Mobject::new(geometry::square(Point::new(2.0, 0.0), 1.2)));
+        let src0 = scene.graph.center_of(src);
+        let dst0 = scene.graph.center_of(dst);
+        scene.play_transform_from_copy(src, dst, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let d0 = sim.center_of(dst);
+        assert!((d0.x - src0.x).abs() < 0.15, "t0 dest should look like source, {d0:?}");
+        assert!((sim.center_of(src).x - src0.x).abs() < 0.05);
+        scene.timeline.apply(&mut sim, 1.0);
+        let d1 = sim.center_of(dst);
+        assert!((d1.x - dst0.x).abs() < 0.15, "t1 dest {d1:?} vs {dst0:?}");
+    }
+
+    #[test]
+    fn broadcast_emits_fading_copies() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.5)));
+        scene.play_broadcast(c, 1.0);
+        assert!(scene.graph.len() >= 6, "original + 5 copies");
+        let copies: Vec<_> = (0..scene.graph.len()).filter(|&id| id != c).collect();
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let o0 = sim.get(copies[0]).style.opacity;
+        scene.timeline.apply(&mut sim, scene.duration());
+        let o1 = sim.get(copies[0]).style.opacity;
+        assert!(o0 > 0.5, "first copy starts opaque, {o0}");
+        assert!(o1 < 0.15, "first copy ends faded, {o1}");
     }
 }
