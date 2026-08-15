@@ -176,6 +176,41 @@ impl Scene {
         self.play_lagged(anims, lag);
     }
 
+    /// Reverse Write: last glyph uncreates first (Manim `Unwrite`).
+    pub fn play_unwrite(&mut self, target: NodeId, duration: f64) {
+        let mut targets = path_targets(&self.graph, target);
+        targets.reverse();
+        let n = targets.len();
+        let lag = 0.1;
+        let each = duration / (1.0 + (n.saturating_sub(1) as f64) * lag);
+        let anims: Vec<_> = targets
+            .iter()
+            .map(|&id| Animation::uncreate(&self.graph, id, each))
+            .collect();
+        self.play_lagged(anims, lag);
+    }
+
+    /// Fade out then in (Manim `Blink`).
+    pub fn play_blink(&mut self, target: NodeId, duration: f64) {
+        let half = (duration * 0.5).max(1e-3);
+        let mut fade_in = Animation::fade_in(&self.graph, target, half);
+        fade_in.start = half;
+        self.play([
+            Animation::fade_out(&self.graph, target, half),
+            fade_in,
+        ]);
+    }
+
+    /// Ring shrinks onto a baked point (Manim `FocusOn`, no live follow).
+    pub fn play_focus_on(&mut self, at: kurbo::Point, duration: f64, color: Color) {
+        let style = Style::default().no_fill().with_stroke(color, 6.0);
+        let id = self.add(Mobject::new(geometry::circle(at, 1.6)).with_style(style));
+        self.play([
+            Animation::scale(&self.graph, id, 0.08, duration),
+            Animation::fade_out(&self.graph, id, duration),
+        ]);
+    }
+
     pub fn play_uncreate(&mut self, target: NodeId, duration: f64) {
         let anims: Vec<_> = path_targets(&self.graph, target)
             .into_iter()
@@ -622,6 +657,18 @@ mod tests {
         scene.timeline.apply(&mut sim, 0.25);
         assert!((sim.get(a).style.opacity - 0.25).abs() < 1e-6);
         assert_eq!(sim.get(b).style.opacity, 0.0);
+    }
+
+    #[test]
+    fn play_unwrite_reverses_leaf_order() {
+        let mut scene = Scene::new();
+        let a = scene.add(Mobject::new(geometry::circle(Point::new(-1.0, 0.0), 0.4)));
+        let b = scene.add(Mobject::new(geometry::circle(Point::new(1.0, 0.0), 0.4)));
+        let g = scene.graph.group_nodes(&[a, b]);
+        scene.play_unwrite(g, 1.0);
+        assert!(scene.timeline.animations.len() >= 2);
+        let first = &scene.timeline.animations[0];
+        assert_eq!(first.target, b, "unwrite should start with the last leaf");
     }
 
     #[test]

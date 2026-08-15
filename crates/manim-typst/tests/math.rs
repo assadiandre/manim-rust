@@ -268,6 +268,54 @@ fn math_table_compiles_plus() {
 }
 
 #[test]
+fn labeled_table_grows_for_headers() {
+    use manim_core::{SceneGraph, Style};
+    use manim_typst::add_table_labeled;
+    let mut g = SceneGraph::new();
+    let id = add_table_labeled(
+        &mut g,
+        &[vec!["1".into(), "2".into()], vec!["3".into(), "4".into()]],
+        &["R1".into(), "R2".into()],
+        &["C1".into(), "C2".into()],
+        "",
+        &MathOptions::default(),
+        0.6,
+        0.4,
+        true,
+        true,
+        Style::default(),
+    )
+    .unwrap();
+    let highlight = manim_typst::add_highlighted_cell(
+        &mut g,
+        id,
+        4,
+        manim_core::palette::yellow(),
+        0.45,
+    );
+    assert!(g.get(highlight).z_index < 0);
+}
+
+#[test]
+fn labeled_arrow_is_named() {
+    use manim_core::constants::UP;
+    use manim_core::SceneGraph;
+    use manim_typst::add_labeled_arrow;
+    let mut g = SceneGraph::new();
+    let id = add_labeled_arrow(
+        &mut g,
+        manim_core::kurbo::Point::new(-1.0, 0.0),
+        manim_core::kurbo::Point::new(1.0, 0.0),
+        "v",
+        UP,
+        0.2,
+        &MathOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(g.get(id).name.as_deref(), Some("labeled_arrow"));
+}
+
+#[test]
 fn table_two_by_two_has_four_cells() {
     use manim_core::SceneGraph;
     use manim_typst::add_table;

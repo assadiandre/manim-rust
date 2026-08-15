@@ -120,4 +120,7 @@ crates/
 - M21 lists, MathTable, BarChart, FunctionGraph / ParametricFunction:
   bullets and math cells via Typst, bars as baked rects, Python `f`
   sampled once at authoring time.
+- M22 table row/col labels and highlighted cells; Triangle /
+  ArcBetweenPoints / CurvedDoubleArrow / LabeledArrow; Unwrite, Blink,
+  GrowArrow, and FocusOn as compiled timeline data.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

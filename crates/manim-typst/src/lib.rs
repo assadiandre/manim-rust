@@ -1184,6 +1184,118 @@ pub fn add_labeled_line(
     Ok(group)
 }
 
+/// Arrow plus a math label at the midpoint (Manim `LabeledArrow`).
+pub fn add_labeled_arrow(
+    scene: &mut manim_core::SceneGraph,
+    start: kurbo::Point,
+    end: kurbo::Point,
+    source: &str,
+    direction: kurbo::Vec2,
+    buff: f64,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let stroke = options.color.unwrap_or_else(palette_white);
+    let arrow = manim_core::add_arrow(
+        scene,
+        start,
+        end,
+        0.0,
+        0.0,
+        Style::default().with_stroke(stroke, 5.0),
+    );
+    let label = add_math(scene, source, options)?;
+    let mid = start.lerp(end, 0.5);
+    scene.next_to_point(label, mid, direction, buff);
+    let group = scene.group_nodes(&[arrow, label]);
+    scene.get_mut(group).name = Some("labeled_arrow".into());
+    Ok(group)
+}
+
+/// Table with optional row/column labels (Manim `Table` labels).
+pub fn add_table_labeled(
+    scene: &mut manim_core::SceneGraph,
+    cells: &[Vec<String>],
+    row_labels: &[String],
+    col_labels: &[String],
+    top_left: &str,
+    options: &MathOptions,
+    buff_x: f64,
+    buff_y: f64,
+    include_inner_lines: bool,
+    include_outer_lines: bool,
+    line_style: Style,
+) -> Result<manim_core::NodeId, TypstError> {
+    let data_cols = cells.iter().map(|r| r.len()).max().unwrap_or(0);
+    if cells.is_empty() || data_cols == 0 {
+        return Err(TypstError::Compile("empty table".into()));
+    }
+    let has_row = !row_labels.is_empty();
+    let has_col = !col_labels.is_empty();
+    let mut grid: Vec<Vec<String>> = Vec::new();
+    if has_col {
+        let mut header = Vec::new();
+        if has_row {
+            header.push(if top_left.is_empty() {
+                "·".into()
+            } else {
+                top_left.into()
+            });
+        }
+        for c in 0..data_cols {
+            header.push(col_labels.get(c).cloned().unwrap_or_else(|| " ".into()));
+        }
+        grid.push(header);
+    }
+    for (i, row) in cells.iter().enumerate() {
+        let mut r = Vec::new();
+        if has_row {
+            r.push(row_labels.get(i).cloned().unwrap_or_else(|| " ".into()));
+        }
+        for c in 0..data_cols {
+            r.push(row.get(c).cloned().unwrap_or_else(|| " ".into()));
+        }
+        grid.push(r);
+    }
+    add_table_with_lines(
+        scene,
+        &grid,
+        options,
+        buff_x,
+        buff_y,
+        include_inner_lines,
+        include_outer_lines,
+        line_style,
+    )
+}
+
+fn table_cell_ids(
+    scene: &manim_core::SceneGraph,
+    table: manim_core::NodeId,
+) -> Vec<manim_core::NodeId> {
+    let kids = scene.children_of(table).to_vec();
+    if let Some(&last) = kids.last() {
+        if scene.get(last).name.as_deref() == Some("table_lines") && kids.len() >= 2 {
+            return scene.children_of(kids[0]).to_vec();
+        }
+    }
+    kids
+}
+
+/// Yellow (or given) fill behind one grid cell (Manim `add_highlighted_cell`).
+pub fn add_highlighted_cell(
+    scene: &mut manim_core::SceneGraph,
+    table: manim_core::NodeId,
+    index: usize,
+    color: manim_core::peniko::Color,
+    opacity: f32,
+) -> manim_core::NodeId {
+    let cells = table_cell_ids(scene, table);
+    let target = cells.get(index).copied().unwrap_or(table);
+    let id = manim_core::add_background_rect(scene, target, 0.08, color, opacity);
+    scene.reparent(id, Some(table));
+    id
+}
+
 /// Axis tick labels: x below the axis, y to the left. Origin is labeled
 /// only on x so "0" is not drawn twice.
 pub fn add_axes_labels(

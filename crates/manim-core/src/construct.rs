@@ -681,6 +681,49 @@ pub fn add_curved_arrow(
     group
 }
 
+/// Arc with tips at both ends (Manim `CurvedDoubleArrow`).
+pub fn add_curved_double_arrow(
+    graph: &mut SceneGraph,
+    start: Point,
+    end: Point,
+    sweep: f64,
+    style: Style,
+) -> NodeId {
+    let full = geometry::arc_between_points(start, end, sweep);
+    let len = geometry::path_length(&full);
+    let tip_len = geometry::default_tip_length(len);
+    let t0 = (tip_len / len.max(1e-9)).clamp(0.05, 0.45);
+    let t1 = (1.0 - t0).clamp(0.55, 0.95);
+    let shaft = geometry::trim(&full, t0, t1);
+    let tip_end = geometry::arrow_tip(
+        geometry::point_along(&full, t1),
+        end,
+        tip_len,
+        tip_len * 0.7,
+    );
+    let tip_start = geometry::arrow_tip(
+        geometry::point_along(&full, t0),
+        start,
+        tip_len,
+        tip_len * 0.7,
+    );
+    let color = style.stroke.or(style.fill).unwrap_or_else(palette::white);
+    let group = graph.add(Mobject::group().named("curved_double_arrow"));
+    graph.add_child(
+        group,
+        Mobject::new(shaft).with_style(style.clone().no_fill()),
+    );
+    graph.add_child(
+        group,
+        Mobject::new(tip_end).with_style(Style::filled(color).no_stroke()),
+    );
+    graph.add_child(
+        group,
+        Mobject::new(tip_start).with_style(Style::filled(color).no_stroke()),
+    );
+    group
+}
+
 /// Angle mark between `p1`–`vertex`–`p2` (Manim `Angle`).
 pub fn add_angle(
     graph: &mut SceneGraph,
@@ -1079,6 +1122,20 @@ mod tests {
         let n = g.children_of(id).len();
         assert!(n >= 9, "expected a 3x3 field of arrows, got {n}");
         assert_eq!(g.get(id).name.as_deref(), Some("arrow_field"));
+    }
+
+    #[test]
+    fn curved_double_arrow_has_shaft_and_two_tips() {
+        let mut g = SceneGraph::new();
+        let id = add_curved_double_arrow(
+            &mut g,
+            Point::new(-1.0, 0.0),
+            Point::new(1.0, 0.0),
+            std::f64::consts::FRAC_PI_2,
+            Style::default(),
+        );
+        assert_eq!(g.children_of(id).len(), 3);
+        assert_eq!(g.get(id).name.as_deref(), Some("curved_double_arrow"));
     }
 
     #[test]
