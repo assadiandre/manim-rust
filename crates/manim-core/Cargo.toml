@@ -12,3 +12,4 @@ peniko = "0.6.1"
 i_overlay = "8"
 usvg = "0.48"
 image = "0.25.10"
+typst-assets = { version = "0.15.1", features = ["fonts"] }

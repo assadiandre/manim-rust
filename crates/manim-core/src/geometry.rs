@@ -5,7 +5,8 @@
 //! arbitrary paths always have a common parameterization for interpolation.
 
 use kurbo::{
-    Arc, BezPath, Circle, Ellipse, ParamCurveArclen, PathEl, Point, Rect, RoundedRect, Shape, Vec2,
+    Affine, Arc, BezPath, Circle, Ellipse, ParamCurveArclen, PathEl, Point, Rect, RoundedRect,
+    Shape, Vec2,
 };
 
 use crate::constants::{DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DASH_LENGTH};
@@ -733,6 +734,12 @@ pub fn trim(path: &BezPath, t0: f64, t1: f64) -> BezPath {
 
 /// Interpolate between two arbitrary paths via common resampling.
 pub fn lerp_paths(a: &BezPath, b: &BezPath, samples: usize, t: f64) -> BezPath {
+    lerp_paths_arc(a, b, samples, t, 0.0)
+}
+
+/// Like `lerp_paths`, but each point pair travels along a circular arc of
+/// included angle `path_arc` (Manim `Transform(path_arc=…)`).
+pub fn lerp_paths_arc(a: &BezPath, b: &BezPath, samples: usize, t: f64, path_arc: f64) -> BezPath {
     let (pa, closed_a) = resample(a, samples);
     let (pb, _) = resample(b, samples);
     if pa.is_empty() {
@@ -744,9 +751,34 @@ pub fn lerp_paths(a: &BezPath, b: &BezPath, samples: usize, t: f64) -> BezPath {
     let out: Vec<Point> = pa
         .iter()
         .zip(pb.iter())
-        .map(|(x, y)| x.lerp(*y, t))
+        .map(|(x, y)| lerp_arc(*x, *y, path_arc, t))
         .collect();
     points_to_path(&out, closed_a)
+}
+
+/// Point at fraction `t` along the circular arc from `a` to `b` with included
+/// angle `path_arc`. Zero angle is a straight lerp.
+pub fn lerp_arc(a: Point, b: Point, path_arc: f64, t: f64) -> Point {
+    if path_arc.abs() < 1e-6 {
+        return a.lerp(b, t);
+    }
+    let d = b - a;
+    let chord = d.hypot();
+    if chord < 1e-12 {
+        return a;
+    }
+    let half = path_arc / 2.0;
+    let tan_half = half.tan();
+    let center = if tan_half.abs() < 1e-6 || tan_half.abs() > 1e6 {
+        Point::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5)
+    } else {
+        let perp = kurbo::Vec2::new(-d.y, d.x);
+        Point::new(
+            (a.x + b.x) * 0.5 - perp.x / (2.0 * tan_half),
+            (a.y + b.y) * 0.5 - perp.y / (2.0 * tan_half),
+        )
+    };
+    Affine::rotate_about(path_arc * t, center) * a
 }
 
 /// Tight-ish bounding box (from curve segments, not just control points).
@@ -825,5 +857,18 @@ mod tests {
                 && bulged.height() > straight.height() + 0.2,
             "θ=π/2 should bulge past the square, straight={straight:?} bulged={bulged:?}"
         );
+    }
+
+    #[test]
+    fn lerp_arc_clockwise_semicircle_goes_up() {
+        let a = Point::new(-1.0, 0.0);
+        let b = Point::new(1.0, 0.0);
+        let mid = lerp_arc(a, b, -std::f64::consts::PI, 0.5);
+        assert!(
+            mid.y > 0.8 && mid.x.abs() < 0.15,
+            "clockwise −π from left to right should pass near (0, 1), got {mid:?}"
+        );
+        let end = lerp_arc(a, b, -std::f64::consts::PI, 1.0);
+        assert!((end.x - 1.0).abs() < 0.05 && end.y.abs() < 0.05, "{end:?}");
     }
 }

@@ -1,7 +1,10 @@
 //! Authoring-time SVG import: parse once with `usvg` into `kurbo::BezPath`
 //! mobjects. `usvg` is a parser, not a render backend.
 //!
-//! This is user SVG import, not a Typst round-trip.
+//! This is user SVG import, not a Typst round-trip. SVG `<text>` is flattened
+//! to glyph outlines with the same bundled fonts Typst uses.
+
+use std::sync::LazyLock;
 
 use kurbo::{Affine, BezPath, Point, Rect, Shape};
 use peniko::{Color, ImageData};
@@ -40,7 +43,7 @@ struct Fragment {
 ///
 /// If `height <= 0`, uses `2.0` (Manim `SVGMobject` default).
 pub fn svg_mobjects(svg: &str, height: f64) -> Result<Vec<Mobject>, SvgError> {
-    let tree = usvg::Tree::from_str(svg, &usvg::Options::default())
+    let tree = usvg::Tree::from_str(svg, svg_options())
         .map_err(|e| SvgError::Parse(e.to_string()))?;
 
     let mut fragments = Vec::new();
@@ -120,9 +123,21 @@ fn walk_group(group: &usvg::Group, out: &mut Vec<Fragment>) {
                     }
                 }
             }
-            usvg::Node::Text(_) => {}
+            usvg::Node::Text(text) => walk_group(text.flattened(), out),
         }
     }
+}
+
+fn svg_options() -> &'static usvg::Options<'static> {
+    static OPT: LazyLock<usvg::Options<'static>> = LazyLock::new(|| {
+        let mut opt = usvg::Options::default();
+        for font in typst_assets::fonts() {
+            opt.fontdb_mut().load_font_data(font.to_vec());
+        }
+        opt.font_family = "DejaVu Sans Mono".into();
+        opt
+    });
+    &OPT
 }
 
 fn path_to_fragment(path: &usvg::Path) -> Option<Fragment> {
@@ -276,6 +291,28 @@ mod tests {
         assert!(
             kids.iter().any(|&c| graph.get(c).image.is_some()),
             "expected a raster child from <image>"
+        );
+    }
+
+    #[test]
+    fn svg_text_flattens_to_paths() {
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40">
+            <text x="8" y="28" font-family="DejaVu Sans Mono" font-size="24" fill="#FFFF00">Hi</text>
+        </svg>"##;
+        let mut graph = SceneGraph::new();
+        let id = add_svg(&mut graph, svg, 2.0).expect("text svg");
+        let n_paths = graph
+            .children_of(id)
+            .iter()
+            .filter(|&&c| !graph.get(c).path.elements().is_empty())
+            .count();
+        assert!(n_paths >= 1, "expected glyph outlines, got {n_paths}");
+        assert!(
+            graph
+                .children_of(id)
+                .iter()
+                .any(|&c| graph.get(c).style.fill.is_some()),
+            "expected a filled glyph"
         );
     }
 

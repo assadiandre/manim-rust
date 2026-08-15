@@ -31,7 +31,11 @@ pub enum AnimationKind {
     /// Scale 0 → 1 about a pivot (Manim `GrowFromCenter`).
     Grow { from: Affine, about: Point },
     /// Path morph via common resampling.
-    Morph { from: BezPath, to: BezPath },
+    Morph {
+        from: BezPath,
+        to: BezPath,
+        path_arc: f64,
+    },
     /// Interpolate fill and/or stroke color (Manim `set_color` animate).
     Recolor {
         from_fill: Option<Color>,
@@ -211,8 +215,27 @@ impl Animation {
     }
 
     pub fn morph(scene: &SceneGraph, target: NodeId, to: BezPath, duration: f64) -> Self {
+        Self::morph_arc(scene, target, to, 0.0, duration)
+    }
+
+    pub fn morph_arc(
+        scene: &SceneGraph,
+        target: NodeId,
+        to: BezPath,
+        path_arc: f64,
+        duration: f64,
+    ) -> Self {
         let from = scene.get(target).path.clone();
-        Self::new(target, AnimationKind::Morph { from, to }, 0.0, duration)
+        Self::new(
+            target,
+            AnimationKind::Morph {
+                from,
+                to,
+                path_arc,
+            },
+            0.0,
+            duration,
+        )
     }
 
     pub fn recolor(scene: &SceneGraph, target: NodeId, to: Color, duration: f64) -> Self {
@@ -224,6 +247,27 @@ impl Animation {
                 to_fill: s.fill.map(|_| to),
                 from_stroke: s.stroke,
                 to_stroke: s.stroke.map(|_| to),
+            },
+            0.0,
+            duration,
+        )
+    }
+
+    pub fn recolor_to_other(
+        scene: &SceneGraph,
+        target: NodeId,
+        other: NodeId,
+        duration: f64,
+    ) -> Self {
+        let from = &scene.get(target).style;
+        let to = &scene.get(other).style;
+        Self::new(
+            target,
+            AnimationKind::Recolor {
+                from_fill: from.fill,
+                to_fill: to.fill,
+                from_stroke: from.stroke,
+                to_stroke: to.stroke,
             },
             0.0,
             duration,
@@ -511,9 +555,13 @@ impl Animation {
                     * Affine::translate(-about.to_vec2());
                 scene.get_mut(self.target).transform = *from * scale_about;
             }
-            AnimationKind::Morph { from, to } => {
+            AnimationKind::Morph {
+                from,
+                to,
+                path_arc,
+            } => {
                 scene.get_mut(self.target).path =
-                    geometry::lerp_paths(from, to, MORPH_SAMPLES, alpha);
+                    geometry::lerp_paths_arc(from, to, MORPH_SAMPLES, alpha, *path_arc);
             }
             AnimationKind::Recolor {
                 from_fill,

@@ -143,4 +143,7 @@ crates/
   `match_center=False`; authoring-time, no per-frame Python).
 - M29 TransformFromCopy (target interpolates from the source snapshot),
   Broadcast (lagged Restore copies), FadeToColor, and VDict.
+- M30 SVG `<text>` flattened to glyph outlines (bundled Typst fonts, no
+  Typst→SVG round-trip) and ClockwiseTransform / CounterclockwiseTransform
+  as Morph with a compiled `path_arc`.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

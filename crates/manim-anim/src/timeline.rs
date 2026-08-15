@@ -495,6 +495,22 @@ impl Scene {
         self.play(anims);
     }
 
+    /// Morph `target` into `dest`'s path along a clockwise semicircle
+    /// (Manim `ClockwiseTransform`).
+    pub fn play_clockwise_transform(&mut self, target: NodeId, dest: NodeId, duration: f64) {
+        let to = self.graph.get(dest).path.clone();
+        self.play([
+            Animation::morph_arc(
+                &self.graph,
+                target,
+                to,
+                -std::f64::consts::PI,
+                duration,
+            ),
+            Animation::recolor_to_other(&self.graph, target, dest, duration),
+        ]);
+    }
+
     pub fn duration(&self) -> f64 {
         self.now
     }
@@ -1328,6 +1344,24 @@ mod tests {
         scene.timeline.apply(&mut sim, 1.0);
         let d1 = sim.center_of(dst);
         assert!((d1.x - dst0.x).abs() < 0.15, "t1 dest {d1:?} vs {dst0:?}");
+    }
+
+    #[test]
+    fn clockwise_transform_arcs_above() {
+        let mut scene = Scene::new();
+        let src = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.3)));
+        let dst = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.3)));
+        scene.play_clockwise_transform(src, dst, 1.0);
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.5);
+        let mid = sim.center_of(src);
+        assert!(
+            mid.y > 1.2 && mid.x.abs() < 0.4,
+            "clockwise mid should be above, {mid:?}"
+        );
+        scene.timeline.apply(&mut sim, 1.0);
+        let end = sim.center_of(src);
+        assert!((end.x - 2.0).abs() < 0.2 && end.y.abs() < 0.2, "{end:?}");
     }
 
     #[test]
