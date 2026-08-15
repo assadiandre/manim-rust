@@ -38,7 +38,9 @@ use manim_typst::{
     add_code as rust_add_code, add_decimal as rust_add_decimal, add_math,
     add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
     add_complex_plane_labels as rust_add_complex_plane_labels,
-    add_decimal_atlas as rust_add_decimal_atlas, add_table as rust_add_table,
+    add_decimal_atlas as rust_add_decimal_atlas, add_markup as rust_add_markup,
+    add_paragraph as rust_add_paragraph,
+    add_table_with_lines as rust_add_table_with_lines,
     add_tex as add_latex, add_text as rust_add_text, add_title as rust_add_title,
     digit_atlas, MathOptions,
 };
@@ -722,6 +724,44 @@ impl PyScene {
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         self.scene.graph.get_mut(id).transform = manim_core::kurbo::Affine::translate((x, y));
         Ok(id)
+    }
+
+    #[pyo3(signature = (source, color = None, font_size_pt = 48.0))]
+    fn add_markup(
+        &mut self,
+        source: &str,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_markup(&mut self.scene.graph, source, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (source, line_spacing = -1.0, alignment = None, color = None, font_size_pt = 48.0))]
+    fn add_paragraph(
+        &mut self,
+        source: &str,
+        line_spacing: f64,
+        alignment: Option<String>,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_paragraph(
+            &mut self.scene.graph,
+            source,
+            line_spacing,
+            alignment.as_deref(),
+            &options,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     #[pyo3(signature = (x = 0.0, y = 0.0, stroke = Some("white".to_string()), stroke_width = 6.0))]
@@ -1610,19 +1650,46 @@ impl PyScene {
         ))
     }
 
-    #[pyo3(signature = (cells, font_size_pt = 36.0, color = None))]
+    #[pyo3(signature = (
+        cells,
+        font_size_pt = 36.0,
+        color = None,
+        include_inner_lines = false,
+        include_outer_lines = false,
+        buff_x = 0.25,
+        buff_y = 0.25,
+        line_color = None,
+        line_stroke_width = 2.0
+    ))]
     fn add_table(
         &mut self,
         cells: Vec<Vec<String>>,
         font_size_pt: f64,
         color: Option<String>,
+        include_inner_lines: bool,
+        include_outer_lines: bool,
+        buff_x: f64,
+        buff_y: f64,
+        line_color: Option<String>,
+        line_stroke_width: f64,
     ) -> PyResult<usize> {
         let options = MathOptions {
             font_size_pt,
             color: color.as_deref().map(parse_color).transpose()?,
         };
-        rust_add_table(&mut self.scene.graph, &cells, &options)
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+        let stroke = line_color.as_deref().unwrap_or("white");
+        let style = build_style(None, Some(stroke), line_stroke_width)?;
+        rust_add_table_with_lines(
+            &mut self.scene.graph,
+            &cells,
+            &options,
+            buff_x,
+            buff_y,
+            include_inner_lines,
+            include_outer_lines,
+            style,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     #[pyo3(signature = (

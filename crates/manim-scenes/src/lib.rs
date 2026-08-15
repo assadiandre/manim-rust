@@ -14,8 +14,8 @@ use manim_core::{
 };
 use manim_typst::{
     add_code, add_complex_plane_labels, add_decimal, add_decimal_atlas, add_graph_label,
-    add_labeled_dot, add_labeled_line, add_math,
-    add_matrix, add_number_line_labels, add_table, add_text, add_title, digit_atlas, MathOptions,
+    add_labeled_dot, add_labeled_line, add_markup, add_math, add_matrix, add_number_line_labels,
+    add_paragraph, add_table, add_table_with_lines, add_text, add_title, digit_atlas, MathOptions,
 };
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
@@ -909,6 +909,53 @@ pub fn probes() -> Vec<Probe> {
         .with_style(Style::default().with_stroke(palette::blue(), 6.0)),
     );
     out.push(probe("curves", s, &[0.0]));
+
+    // MarkupText + Paragraph
+    let mut s = Scene::new();
+    let markup = add_markup(
+        &mut s.graph,
+        r#"<span foreground="blue">Blue</span> is <i>cool</i> and <b>bold</b>"#,
+        &MathOptions {
+            font_size_pt: 42.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("markup");
+    s.graph.move_to(markup, Point::new(0.0, 1.5));
+    let para = add_paragraph(
+        &mut s.graph,
+        "Line one\nLine two is longer\nLine three",
+        0.28,
+        Some("left"),
+        &MathOptions {
+            font_size_pt: 36.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("paragraph");
+    s.graph.move_to(para, Point::new(0.0, -1.3));
+    out.push(probe("markup", s, &[0.0]));
+
+    // Table with inner + outer grid lines
+    let mut s = Scene::new();
+    add_table_with_lines(
+        &mut s.graph,
+        &[
+            vec!["This".into(), "is a".into()],
+            vec!["grid".into(), "table".into()],
+        ],
+        &MathOptions {
+            font_size_pt: 40.0,
+            ..MathOptions::default()
+        },
+        1.1,
+        0.7,
+        true,
+        true,
+        Style::default().with_stroke(palette::white(), 2.0),
+    )
+    .expect("tgrid");
+    out.push(probe("tgrid", s, &[0.0]));
 
     out
 }

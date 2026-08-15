@@ -421,6 +421,36 @@ class Text(Mobject):
         return raw.add_text(self.text, color=self.color, font_size_pt=self.font_size)
 
 
+class MarkupText(Mobject):
+    def __init__(self, text, color=WHITE, font_size=48.0):
+        super().__init__()
+        self.text = text
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        return raw.add_markup(self.text, color=self.color, font_size_pt=self.font_size)
+
+
+class Paragraph(Mobject):
+    def __init__(self, *text, line_spacing=-1.0, alignment=None, color=WHITE, font_size=48.0):
+        super().__init__()
+        self.text = "\n".join(text)
+        self.line_spacing = line_spacing
+        self.alignment = alignment
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        return raw.add_paragraph(
+            self.text,
+            line_spacing=self.line_spacing,
+            alignment=self.alignment,
+            color=self.color,
+            font_size_pt=self.font_size,
+        )
+
+
 class MathTex(Mobject):
     def __init__(self, source, color=WHITE, font_size=48.0):
         super().__init__()
@@ -687,14 +717,41 @@ class Axes(Mobject):
 
 
 class Table(Mobject):
-    def __init__(self, cells, font_size=36.0, color=WHITE):
+    def __init__(
+        self,
+        cells,
+        font_size=36.0,
+        color=WHITE,
+        include_outer_lines=False,
+        include_inner_lines=True,
+        h_buff=0.25,
+        v_buff=0.25,
+        line_color=WHITE,
+        line_stroke_width=2.0,
+    ):
         super().__init__()
         self.cells = cells
         self.font_size = font_size
         self.color = color
+        self.include_outer_lines = include_outer_lines
+        self.include_inner_lines = include_inner_lines
+        self.h_buff = h_buff
+        self.v_buff = v_buff
+        self.line_color = line_color
+        self.line_stroke_width = line_stroke_width
 
     def _add(self, raw):
-        return raw.add_table(self.cells, font_size_pt=self.font_size, color=self.color)
+        return raw.add_table(
+            self.cells,
+            font_size_pt=self.font_size,
+            color=self.color,
+            include_inner_lines=self.include_inner_lines,
+            include_outer_lines=self.include_outer_lines,
+            buff_x=self.h_buff,
+            buff_y=self.v_buff,
+            line_color=self.line_color,
+            line_stroke_width=self.line_stroke_width,
+        )
 
 
 class ArrowVectorField(Mobject):

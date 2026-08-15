@@ -119,6 +119,21 @@ fn golden_layout_and_axes() {
 }
 
 #[test]
+fn golden_m20_static() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    for name in ["markup", "tgrid"] {
+        let scene = manim_scenes::probes()
+            .into_iter()
+            .find(|p| p.name == name)
+            .unwrap_or_else(|| panic!("{name} probe"));
+        let mut sim = scene.scene.graph.clone();
+        scene.scene.timeline.apply(&mut sim, 0.0);
+        let px = r.render_frame(&mut sim).unwrap().to_vec();
+        assert_golden(&px, 480, 270, &format!("{name}.png"));
+    }
+}
+
+#[test]
 fn golden_m19_static() {
     let mut r = Renderer::new(480, 270, black()).unwrap();
     for name in ["curves"] {
