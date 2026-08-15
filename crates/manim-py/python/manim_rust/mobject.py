@@ -107,6 +107,18 @@ class Mobject:
 
         return self._apply(op)
 
+    def save_state(self):
+        def op(raw, node):
+            raw.save_state(node)
+
+        return self._apply(op)
+
+    def restore(self):
+        def op(raw, node):
+            raw.restore(node)
+
+        return self._apply(op)
+
     def generate_target(self):
         self.target = _Target()
         return self.target

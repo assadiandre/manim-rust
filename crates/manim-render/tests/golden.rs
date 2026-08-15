@@ -134,6 +134,30 @@ fn golden_m22_static() {
 }
 
 #[test]
+fn golden_m27() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    let scene = manim_scenes::probes()
+        .into_iter()
+        .find(|p| p.name == "svgraster")
+        .expect("svgraster probe");
+    let mut sim = scene.scene.graph.clone();
+    scene.scene.timeline.apply(&mut sim, 0.0);
+    let px = r.render_frame(&mut sim).unwrap().to_vec();
+    assert_golden(&px, 480, 270, "svgraster.png");
+
+    let scene = manim_scenes::probes()
+        .into_iter()
+        .find(|p| p.name == "restore")
+        .expect("restore probe");
+    for &t in &[0.0, 0.5, 1.0] {
+        let mut sim = scene.scene.graph.clone();
+        scene.scene.timeline.apply(&mut sim, t);
+        let px = r.render_frame(&mut sim).unwrap().to_vec();
+        assert_golden(&px, 480, 270, &format!("restore_{t:.1}.png"));
+    }
+}
+
+#[test]
 fn golden_m26_static() {
     let mut r = Renderer::new(480, 270, black()).unwrap();
     for name in ["raster", "arcp"] {

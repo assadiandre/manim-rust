@@ -133,6 +133,10 @@ class Rotate(Animation):
         return (kind, target, duration, easing, float(self.angle), 0.0, extra)
 
 
+class Restore(Animation):
+    kind = "restore"
+
+
 class Recolor(Animation):
     kind = "recolor"
 

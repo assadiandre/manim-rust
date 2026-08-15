@@ -1226,6 +1226,14 @@ impl PyScene {
         self.scene.graph.set_opacity(target, opacity);
     }
 
+    fn save_state(&mut self, target: NodeId) {
+        self.scene.graph.save_state(target);
+    }
+
+    fn restore(&mut self, target: NodeId) {
+        self.scene.graph.restore(target);
+    }
+
     fn children_of(&self, target: NodeId) -> Vec<NodeId> {
         self.scene.graph.children_of(target).to_vec()
     }
@@ -2694,6 +2702,11 @@ impl PyScene {
                     anims.push(
                         Animation::apply_wave(&self.scene.graph, target, 0.25, 2.0, duration)
                             .with_easing(e),
+                    );
+                }
+                "restore" => {
+                    anims.push(
+                        Animation::restore(&self.scene.graph, target, duration).with_easing(e),
                     );
                 }
                 "transform_matching" => {

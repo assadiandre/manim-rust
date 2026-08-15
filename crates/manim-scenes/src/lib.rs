@@ -1225,6 +1225,19 @@ pub fn probes() -> Vec<Probe> {
     .expect("svg");
     out.push(probe("svg", s, &[0.0]));
 
+    // SVG <image> href (data URI) plus a path ring
+    let mut s = Scene::new();
+    add_svg(
+        &mut s.graph,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR4nGP4/5/hf8SRu/8ZQASIAwBqPQvrM5aq/wAAAABJRU5ErkJggg==" x="10" y="10" width="80" height="80"/>
+            <circle cx="50" cy="50" r="46" fill="none" stroke="#FFFFFF" stroke-width="4"/>
+        </svg>"##,
+        3.4,
+    )
+    .expect("svgraster");
+    out.push(probe("svgraster", s, &[0.0]));
+
     // Boolean ops: union / intersection / difference of overlapping circles
     let mut s = Scene::new();
     let mk = |s: &mut Scene, c: kurbo::Point| {
@@ -1360,6 +1373,18 @@ pub fn probes() -> Vec<Probe> {
         Style::filled(palette::yellow()).with_stroke(palette::white(), 5.0),
     );
     out.push(probe("arcp", s, &[0.0]));
+
+    // save_state + Restore: faded circle on the right travels home
+    let mut s = Scene::new();
+    let home = s.add(
+        Mobject::new(geometry::circle(Point::new(-2.4, 0.0), 0.7))
+            .with_style(Style::filled(palette::yellow()).with_stroke(palette::white(), 4.0)),
+    );
+    s.graph.save_state(home);
+    s.graph.shift(home, Vec2::new(4.8, 0.0));
+    s.graph.set_opacity(home, 0.25);
+    s.play_restore(home, 1.0);
+    out.push(probe("restore", s, &[0.0, 0.5, 1.0]));
 
     out
 }
