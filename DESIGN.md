@@ -113,4 +113,6 @@ crates/
   at authoring time; RoundedRectangle, AnnularSector, BackgroundRectangle.
 - M18 LabeledDot / LabeledLine (Typst label + geometry group) and
   MoveToTarget from `generate_target()` shift/move_to records.
+- M19 Elbow / CubicBezier wrappers and CE rate-func aliases
+  (`rush_into` / `rush_from`).
 - M8 (later) 3D spike: cube pass composited under 2D overlay

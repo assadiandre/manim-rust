@@ -893,5 +893,22 @@ pub fn probes() -> Vec<Probe> {
     .expect("c");
     out.push(probe("labeled", s, &[0.0]));
 
+    // Elbow + cubic bezier
+    let mut s = Scene::new();
+    s.add(
+        Mobject::new(geometry::elbow(Point::new(-2.2, -0.4), 1.4, 0.0))
+            .with_style(Style::default().with_stroke(palette::yellow(), 6.0)),
+    );
+    s.add(
+        Mobject::new(geometry::cubic_bezier(
+            Point::new(0.2, -1.2),
+            Point::new(1.2, 1.6),
+            Point::new(2.4, -1.4),
+            Point::new(3.6, 0.8),
+        ))
+        .with_style(Style::default().with_stroke(palette::blue(), 6.0)),
+    );
+    out.push(probe("curves", s, &[0.0]));
+
     out
 }

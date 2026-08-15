@@ -219,6 +219,40 @@ class Matrix(Mobject):
         return raw.add_matrix(self.matrix, font_size_pt=self.font_size, color=self.color)
 
 
+class Elbow(VMobject):
+    def __init__(self, corner, width=0.5, angle=0.0, **kwargs):
+        super().__init__(**kwargs)
+        self.corner = corner
+        self.elbow_width = width
+        self.angle = angle
+
+    def _add(self, raw):
+        _, stroke, sw = self._style()
+        x, y = as_xy(self.corner)
+        return raw.add_elbow(
+            x, y, size=self.elbow_width, angle=self.angle, stroke=stroke, stroke_width=sw
+        )
+
+
+class CubicBezier(VMobject):
+    def __init__(self, start, control1, control2, end, **kwargs):
+        super().__init__(**kwargs)
+        self.start = start
+        self.control1 = control1
+        self.control2 = control2
+        self.end = end
+
+    def _add(self, raw):
+        _, stroke, sw = self._style()
+        x0, y0 = as_xy(self.start)
+        x1, y1 = as_xy(self.control1)
+        x2, y2 = as_xy(self.control2)
+        x3, y3 = as_xy(self.end)
+        return raw.add_cubic_bezier(
+            x0, y0, x1, y1, x2, y2, x3, y3, stroke=stroke, stroke_width=sw
+        )
+
+
 class BraceLabel(Mobject):
     def __init__(self, mobject, label, direction=DOWN, font_size=36.0):
         super().__init__()
