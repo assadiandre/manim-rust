@@ -117,4 +117,7 @@ crates/
   (`rush_into` / `rush_from`).
 - M20 MarkupText / Paragraph via in-process Typst (Pango subset rewritten
   at authoring time) and Table inner/outer grid lines as baked geometry.
+- M21 lists, MathTable, BarChart, FunctionGraph / ParametricFunction:
+  bullets and math cells via Typst, bars as baked rects, Python `f`
+  sampled once at authoring time.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

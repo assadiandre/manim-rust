@@ -232,6 +232,42 @@ fn table_with_outer_lines_adds_rules() {
 }
 
 #[test]
+fn bulleted_list_has_one_row_per_item() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_bulleted_list;
+    let mut g = SceneGraph::new();
+    let id = add_bulleted_list(
+        &mut g,
+        &["one".into(), "two".into(), "three".into()],
+        0.4,
+        &MathOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(g.children_of(id).len(), 3);
+    assert_eq!(g.get(id).name.as_deref(), Some("bulleted_list"));
+}
+
+#[test]
+fn math_table_compiles_plus() {
+    use manim_core::{SceneGraph, Style};
+    use manim_typst::add_math_table;
+    let mut g = SceneGraph::new();
+    let id = add_math_table(
+        &mut g,
+        &[vec!["+".into(), "0".into()], vec!["2".into(), "7".into()]],
+        &MathOptions::default(),
+        0.8,
+        0.5,
+        true,
+        true,
+        Style::default(),
+    )
+    .unwrap();
+    assert_eq!(g.get(id).name.as_deref(), Some("math_table"));
+    assert!(!g.path_leaves(id).is_empty());
+}
+
+#[test]
 fn table_two_by_two_has_four_cells() {
     use manim_core::SceneGraph;
     use manim_typst::add_table;

@@ -821,6 +821,81 @@ pub fn add_background_rect(
     id
 }
 
+/// Baked bar chart (Manim `BarChart` geometry).
+///
+/// The returned group has two children: a `bars` group (one rect per value,
+/// in order) and an `axes` group. Labels are added separately so Typst stays
+/// out of the geometry crate.
+pub fn add_bar_chart(
+    graph: &mut SceneGraph,
+    values: &[f64],
+    y_min: f64,
+    y_max: f64,
+    x_length: f64,
+    y_length: f64,
+    bar_width: f64,
+    colors: &[crate::peniko::Color],
+    fill_opacity: f32,
+    stroke_width: f64,
+) -> NodeId {
+    let group = graph.add(Mobject::group().named("barchart"));
+    if values.is_empty() {
+        return group;
+    }
+    let span = (y_max - y_min).abs().max(1e-9);
+    let y0_base = y_min.min(y_max);
+    let map_y = |v: f64| -0.5 * y_length + (v - y0_base) / span * y_length;
+    let n = values.len() as f64;
+    let slot = x_length / n;
+    let width = slot * bar_width.clamp(0.05, 1.0);
+    let fallback = [
+        palette::blue(),
+        palette::teal(),
+        palette::purple(),
+        palette::red(),
+        palette::gold(),
+    ];
+    let palette = if colors.is_empty() { &fallback[..] } else { colors };
+    let zero_y = map_y(0.0f64.clamp(y_min.min(y_max), y_min.max(y_max)));
+
+    let bars = graph.add(Mobject::group().named("bars"));
+    for (i, &v) in values.iter().enumerate() {
+        let cx = -0.5 * x_length + (i as f64 + 0.5) * slot;
+        let y1 = map_y(v);
+        let h = (y1 - zero_y).abs().max(1e-4);
+        let cy = 0.5 * (zero_y + y1);
+        let mut style = Style::filled(palette[i % palette.len()])
+            .with_stroke(palette::white(), stroke_width);
+        style.fill_opacity = fill_opacity;
+        graph.add_child(
+            bars,
+            Mobject::new(geometry::rect(Point::new(cx, cy), width, h)).with_style(style),
+        );
+    }
+    graph.reparent(bars, Some(group));
+
+    let axis_style = Style::default().with_stroke(palette::white(), 3.0).no_fill();
+    let axes = graph.add(Mobject::group().named("axes"));
+    graph.add_child(
+        axes,
+        Mobject::new(geometry::line(
+            Point::new(-0.5 * x_length, zero_y),
+            Point::new(0.5 * x_length, zero_y),
+        ))
+        .with_style(axis_style.clone()),
+    );
+    graph.add_child(
+        axes,
+        Mobject::new(geometry::line(
+            Point::new(-0.5 * x_length, map_y(y_min.min(y_max))),
+            Point::new(-0.5 * x_length, map_y(y_min.max(y_max))),
+        ))
+        .with_style(axis_style),
+    );
+    graph.reparent(axes, Some(group));
+    group
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1004,6 +1079,27 @@ mod tests {
         let n = g.children_of(id).len();
         assert!(n >= 9, "expected a 3x3 field of arrows, got {n}");
         assert_eq!(g.get(id).name.as_deref(), Some("arrow_field"));
+    }
+
+    #[test]
+    fn bar_chart_has_one_rect_per_value() {
+        let mut g = SceneGraph::new();
+        let id = add_bar_chart(
+            &mut g,
+            &[1.0, 2.0, 3.0],
+            0.0,
+            3.0,
+            4.0,
+            3.0,
+            0.6,
+            &[],
+            0.7,
+            2.0,
+        );
+        let kids = g.children_of(id);
+        assert_eq!(kids.len(), 2, "bars group + axes group");
+        assert_eq!(g.children_of(kids[0]).len(), 3);
+        assert_eq!(g.get(id).name.as_deref(), Some("barchart"));
     }
 
     #[test]

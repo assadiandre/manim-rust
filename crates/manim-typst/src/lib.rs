@@ -875,6 +875,165 @@ fn add_table_grid_lines(
     group
 }
 
+fn finish_list(
+    scene: &mut manim_core::SceneGraph,
+    rows: &[manim_core::NodeId],
+    buff: f64,
+    name: &str,
+) -> manim_core::NodeId {
+    let group = scene.group_nodes(rows);
+    scene.get_mut(group).name = Some(name.into());
+    scene.arrange(group, manim_core::constants::DOWN, buff, true);
+    let kids: Vec<_> = scene.children_of(group).to_vec();
+    let left = scene.bounding_box(group).x0;
+    for &id in &kids {
+        let x0 = scene.bounding_box(id).x0;
+        scene.shift(id, kurbo::Vec2::new(left - x0, 0.0));
+    }
+    group
+}
+
+/// Item list with a math `dot` marker (Manim `BulletedList`).
+pub fn add_bulleted_list(
+    scene: &mut manim_core::SceneGraph,
+    items: &[String],
+    buff: f64,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let mut rows = Vec::with_capacity(items.len());
+    for item in items {
+        let text = add_markup(scene, item, options)?;
+        let dot = add_math(scene, "dot", options)?;
+        scene.scale_about_center(dot, 1.6);
+        scene.next_to(dot, text, manim_core::constants::LEFT, 0.12);
+        rows.push(scene.group_nodes(&[dot, text]));
+    }
+    Ok(finish_list(scene, &rows, buff, "bulleted_list"))
+}
+
+/// Item list with `1.` / `2.` markers.
+pub fn add_numbered_list(
+    scene: &mut manim_core::SceneGraph,
+    items: &[String],
+    buff: f64,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let mut rows = Vec::with_capacity(items.len());
+    for (i, item) in items.iter().enumerate() {
+        let text = add_markup(scene, item, options)?;
+        let mark = add_text(scene, &format!("{}.", i + 1), options)?;
+        scene.next_to(mark, text, manim_core::constants::LEFT, 0.12);
+        rows.push(scene.group_nodes(&[mark, text]));
+    }
+    Ok(finish_list(scene, &rows, buff, "numbered_list"))
+}
+
+/// Table whose cells are LaTeX math (Manim `MathTable`).
+pub fn add_math_table(
+    scene: &mut manim_core::SceneGraph,
+    cells: &[Vec<String>],
+    options: &MathOptions,
+    buff_x: f64,
+    buff_y: f64,
+    include_inner_lines: bool,
+    include_outer_lines: bool,
+    line_style: Style,
+) -> Result<manim_core::NodeId, TypstError> {
+    if cells.is_empty() {
+        return Err(TypstError::Compile("empty table".into()));
+    }
+    let cols = cells.iter().map(|r| r.len()).max().unwrap_or(0);
+    if cols == 0 {
+        return Err(TypstError::Compile("empty table".into()));
+    }
+    let rows = cells.len();
+    let mut ids = Vec::with_capacity(rows * cols);
+    for row in cells {
+        for c in 0..cols {
+            let text = row.get(c).map(String::as_str).unwrap_or(".");
+            let text = if text.is_empty() { "." } else { text };
+            ids.push(add_tex(scene, text, options).or_else(|_| add_text(scene, text, options))?);
+        }
+    }
+    let table = scene.group_nodes(&ids);
+    scene.arrange_in_grid(table, Some(rows), Some(cols), buff_x, buff_y, true);
+    if !include_inner_lines && !include_outer_lines {
+        scene.get_mut(table).name = Some("math_table".into());
+        return Ok(table);
+    }
+    let cell_ids: Vec<_> = scene.children_of(table).to_vec();
+    let lines = add_table_grid_lines(
+        scene,
+        &cell_ids,
+        rows,
+        cols,
+        buff_x,
+        buff_y,
+        include_inner_lines,
+        include_outer_lines,
+        line_style,
+    );
+    let group = scene.group_nodes(&[table, lines]);
+    scene.get_mut(group).name = Some("math_table".into());
+    Ok(group)
+}
+
+/// Bar chart plus optional name labels under each bar (Manim `BarChart`).
+pub fn add_bar_chart_labeled(
+    scene: &mut manim_core::SceneGraph,
+    values: &[f64],
+    names: &[String],
+    y_min: f64,
+    y_max: f64,
+    x_length: f64,
+    y_length: f64,
+    bar_width: f64,
+    colors: &[manim_core::peniko::Color],
+    fill_opacity: f32,
+    stroke_width: f64,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let chart = manim_core::add_bar_chart(
+        scene,
+        values,
+        y_min,
+        y_max,
+        x_length,
+        y_length,
+        bar_width,
+        colors,
+        fill_opacity,
+        stroke_width,
+    );
+    if names.is_empty() {
+        return Ok(chart);
+    }
+    let bars = scene
+        .children_of(chart)
+        .first()
+        .copied()
+        .ok_or_else(|| TypstError::Compile("bar chart has no bars".into()))?;
+    let bar_ids: Vec<_> = scene.children_of(bars).to_vec();
+    let mut labels = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        if name.is_empty() {
+            continue;
+        }
+        let label = add_text(scene, name, options)?;
+        if let Some(&bar) = bar_ids.get(i) {
+            scene.next_to(label, bar, manim_core::constants::DOWN, 0.15);
+        }
+        labels.push(label);
+    }
+    if labels.is_empty() {
+        return Ok(chart);
+    }
+    let label_group = scene.group_nodes(&labels);
+    let group = scene.group_nodes(&[chart, label_group]);
+    scene.get_mut(group).name = Some("barchart".into());
+    Ok(group)
+}
+
 fn escape_typst_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
