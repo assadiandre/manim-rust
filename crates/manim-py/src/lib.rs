@@ -69,6 +69,8 @@ fn parse_easing(s: &str) -> PyResult<Easing> {
         "ease_out" | "ease_out_cubic" => Ok(Easing::EaseOutCubic),
         "ease_in_out" | "ease_in_out_cubic" => Ok(Easing::EaseInOutCubic),
         "there_and_back" => Ok(Easing::ThereAndBack),
+        "rush_into" => Ok(Easing::EaseInCubic),
+        "rush_from" => Ok(Easing::EaseOutCubic),
         _ => Err(PyValueError::new_err(format!("unknown easing {s:?}"))),
     }
 }
@@ -360,6 +362,48 @@ impl PyScene {
         Ok(self
             .scene
             .add(Mobject::new(geometry::circle(Point::new(x, y), r)).with_style(style)))
+    }
+
+    #[pyo3(signature = (x = 0.0, y = 0.0, size = 0.5, angle = 0.0, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_elbow(
+        &mut self,
+        x: f64,
+        y: f64,
+        size: f64,
+        angle: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::elbow(Point::new(x, y), size, angle)).with_style(style),
+        ))
+    }
+
+    #[pyo3(signature = (x0, y0, x1, y1, x2, y2, x3, y3, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_cubic_bezier(
+        &mut self,
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        x3: f64,
+        y3: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::cubic_bezier(
+                Point::new(x0, y0),
+                Point::new(x1, y1),
+                Point::new(x2, y2),
+                Point::new(x3, y3),
+            ))
+            .with_style(style),
+        ))
     }
 
     #[pyo3(signature = (x1, y1, x2, y2, buff = 0.25, tip_length = 0.0, stroke = Some("white".to_string()), stroke_width = 6.0))]
