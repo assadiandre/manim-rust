@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from manim_rust.constants import (
     DEFAULT_MOBJECT_TO_MOBJECT_BUFFER,
+    DOWN,
     LEFT,
     RIGHT,
     WHITE,
@@ -165,6 +166,60 @@ class VMobject(Mobject):
     def _style(self):
         return _stroke_fill(
             self.color, self.fill_opacity, self.fill_color, self.stroke_width
+        )
+
+
+class Arc(VMobject):
+    def __init__(self, radius=1.0, start_angle=0.0, angle=3.141592653589793, **kwargs):
+        super().__init__(**kwargs)
+        self.radius = radius
+        self.start_angle = start_angle
+        self.angle = angle
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        return raw.add_arc(
+            radius=self.radius,
+            start_angle=self.start_angle,
+            sweep=self.angle,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
+class Sector(VMobject):
+    def __init__(self, radius=1.0, start_angle=0.0, angle=1.5707963267948966, **kwargs):
+        super().__init__(**kwargs)
+        self.radius = radius
+        self.start_angle = start_angle
+        self.angle = angle
+
+    def _add(self, raw):
+        fill, stroke, width = self._style()
+        return raw.add_sector(
+            radius=self.radius,
+            start_angle=self.start_angle,
+            sweep=self.angle,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
+class Annulus(VMobject):
+    def __init__(self, inner_radius=0.5, outer_radius=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.inner_radius = inner_radius
+        self.outer_radius = outer_radius
+
+    def _add(self, raw):
+        fill, stroke, width = self._style()
+        return raw.add_annulus(
+            inner=self.inner_radius,
+            outer=self.outer_radius,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=width,
         )
 
 
@@ -413,6 +468,86 @@ class NumberPlane(Mobject):
             y_max=self.y_range[1],
             faded_line_ratio=self.faded_line_ratio,
         )
+
+
+class NumberLine(Mobject):
+    def __init__(
+        self,
+        x_range=(-4.0, 4.0, 1.0),
+        include_tip=False,
+        include_numbers=False,
+        color=WHITE,
+    ):
+        super().__init__()
+        self.x_range = x_range
+        self.include_tip = include_tip
+        self.include_numbers = include_numbers
+        self.color = color
+
+    def _add(self, raw):
+        nid = raw.add_number_line(
+            x_min=self.x_range[0],
+            x_max=self.x_range[1],
+            x_step=self.x_range[2] if len(self.x_range) > 2 else 1.0,
+            include_tip=self.include_tip,
+            stroke=self.color,
+        )
+        if self.include_numbers:
+            raw.add_number_line_labels(
+                x_min=self.x_range[0],
+                x_max=self.x_range[1],
+                x_step=self.x_range[2] if len(self.x_range) > 2 else 1.0,
+                include_tip=self.include_tip,
+            )
+        return nid
+
+
+class ComplexPlane(Mobject):
+    def __init__(self, x_range=(-7.0, 7.0), y_range=(-4.0, 4.0), include_numbers=False):
+        super().__init__()
+        self.x_range = x_range
+        self.y_range = y_range
+        self.include_numbers = include_numbers
+
+    def _add(self, raw):
+        nid = raw.add_complex_plane(
+            x_min=self.x_range[0],
+            x_max=self.x_range[1],
+            y_min=self.y_range[0],
+            y_max=self.y_range[1],
+        )
+        if self.include_numbers:
+            raw.add_complex_plane_labels(
+                x_min=self.x_range[0],
+                x_max=self.x_range[1],
+                y_min=self.y_range[0],
+                y_max=self.y_range[1],
+            )
+        return nid
+
+
+class Brace(Mobject):
+    def __init__(self, mobject, direction=DOWN, color=WHITE):
+        super().__init__()
+        self.target = mobject
+        self.direction = direction
+        self.color = color
+
+    def _add(self, raw):
+        tid = _node_id(self.target, raw)
+        return raw.add_brace(tid, dir_name(self.direction), stroke=self.color)
+
+
+class SurroundingRectangle(Mobject):
+    def __init__(self, mobject, color=YELLOW, buff=0.15):
+        super().__init__()
+        self.target = mobject
+        self.color = color
+        self.buff = buff
+
+    def _add(self, raw):
+        tid = _node_id(self.target, raw)
+        return raw.add_surrounding_rect(tid, buff=self.buff, stroke=self.color)
 
 
 class Axes(Mobject):

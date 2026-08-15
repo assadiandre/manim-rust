@@ -186,6 +186,23 @@ class ReplacementTransform(Transform):
         return (kind, target, duration, easing, float(other), 0.0, extra)
 
 
+class TransformMatchingShapes(Animation):
+    kind = "transform_matching"
+
+    def __init__(self, mobject, target_mobject, **kwargs):
+        super().__init__(mobject, **kwargs)
+        self.target_mobject = target_mobject
+
+    def _spec(self, raw, run_time=None, rate_func=None):
+        kind, target, duration, easing, _, _, extra = super()._spec(raw, run_time, rate_func)
+        other = _node_id(self.target_mobject, raw)
+        return (kind, target, duration, easing, float(other), 0.0, extra)
+
+
+class TransformMatchingTex(TransformMatchingShapes):
+    """Same pairing as shapes: Typst glyphs have no TeX-string map yet."""
+
+
 class FadeTransform(Animation):
     kind = "fade_transform"
 

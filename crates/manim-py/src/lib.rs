@@ -252,6 +252,42 @@ impl PyScene {
         ))
     }
 
+    #[pyo3(signature = (x = 0.0, y = 0.0, radius = 1.0, start_angle = 0.0, sweep = 1.5707963267948966, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_sector(
+        &mut self,
+        x: f64,
+        y: f64,
+        radius: f64,
+        start_angle: f64,
+        sweep: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::sector(Point::new(x, y), radius, start_angle, sweep))
+                .with_style(style),
+        ))
+    }
+
+    #[pyo3(signature = (x = 0.0, y = 0.0, inner = 0.5, outer = 1.0, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_annulus(
+        &mut self,
+        x: f64,
+        y: f64,
+        inner: f64,
+        outer: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::annulus(Point::new(x, y), inner, outer)).with_style(style),
+        ))
+    }
+
     #[pyo3(signature = (x = 0.0, y = 0.0, radius = 0.08, fill = Some("white".to_string()), stroke = None, stroke_width = 0.0))]
     fn add_dot(
         &mut self,
@@ -1712,6 +1748,15 @@ impl PyScene {
                     let shift_dst =
                         Animation::shift(&self.scene.graph, dest, delta, duration).with_easing(e);
                     anims.extend([fade_out, shift_src, fade_in, shift_dst]);
+                }
+                "transform_matching" => {
+                    let dest = a as usize;
+                    anims.extend(
+                        self.scene
+                            .transform_matching_anims(target, dest, duration)
+                            .into_iter()
+                            .map(|an| an.with_easing(e)),
+                    );
                 }
                 "changing_decimal" => {
                     let places = extra.parse::<usize>().unwrap_or(2);

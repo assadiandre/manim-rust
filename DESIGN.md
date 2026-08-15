@@ -103,4 +103,8 @@ crates/
 - M14 graphing + live decimals: area between two baked curves, DashedVMobject
   on groups, ComplexPlane `i` labels, ChangingDecimal from a Typst digit
   atlas (no Python / no Typst in the frame loop).
+- M15 matching + everyday shapes: TransformMatchingShapes (normalized
+  shape-hash leaf pairs, shift matches, fade leftovers), Arc / Sector /
+  Annulus, and CE wrappers for NumberLine / ComplexPlane / Brace /
+  SurroundingRectangle.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

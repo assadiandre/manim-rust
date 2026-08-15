@@ -782,5 +782,32 @@ pub fn probes() -> Vec<Probe> {
     s.play([Animation::changing_decimal(dec, 1.0, 12.0, 0, atlas, 1.2)]);
     out.push(probe("decimal", s, &[0.0, 0.4, 0.8, 1.2]));
 
+    // arc / sector / annulus
+    let mut s = Scene::new();
+    s.add(
+        Mobject::new(geometry::arc(Point::new(-3.0, 0.0), 1.2, 0.3, 2.2))
+            .with_style(Style::default().with_stroke(palette::yellow(), 6.0)),
+    );
+    s.add(
+        Mobject::new(geometry::sector(Point::new(0.0, 0.0), 1.3, 0.4, 1.8)).with_style(
+            Style::filled(palette::blue()).with_stroke(palette::white(), 3.0),
+        ),
+    );
+    s.add(
+        Mobject::new(geometry::annulus(Point::new(3.0, 0.0), 0.55, 1.2)).with_style(
+            Style::filled(palette::red()).with_stroke(palette::white(), 3.0),
+        ),
+    );
+    out.push(probe("rings", s, &[0.0]));
+
+    // TransformMatchingShapes: identical letters rearrange (CE anagram)
+    let mut s = Scene::new();
+    let src = add_text(&mut s.graph, "CAT", &MathOptions::default()).expect("src");
+    s.graph.shift(src, LEFT * 2.4);
+    let dst = add_text(&mut s.graph, "ACT", &MathOptions::default()).expect("dst");
+    s.graph.shift(dst, RIGHT * 2.4);
+    s.play_transform_matching(src, dst, 1.2);
+    out.push(probe("anagram", s, &[0.0, 0.4, 0.8, 1.2]));
+
     out
 }
