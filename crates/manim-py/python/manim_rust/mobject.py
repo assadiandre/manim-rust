@@ -192,6 +192,22 @@ class Arc(VMobject):
         )
 
 
+class ArcBetweenPoints(VMobject):
+    def __init__(self, start, end, angle=1.5707963267948966, **kwargs):
+        super().__init__(**kwargs)
+        self.start = start
+        self.end = end
+        self.angle = angle
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        x1, y1 = as_xy(self.start)
+        x2, y2 = as_xy(self.end)
+        return raw.add_arc_between_points(
+            x1, y1, x2, y2, sweep=self.angle, stroke=stroke, stroke_width=width
+        )
+
+
 class Sector(VMobject):
     def __init__(self, radius=1.0, start_angle=0.0, angle=1.5707963267948966, **kwargs):
         super().__init__(**kwargs)
@@ -254,6 +270,16 @@ class AnnularSector(VMobject):
             stroke=stroke,
             stroke_width=width,
         )
+
+
+class Triangle(VMobject):
+    def __init__(self, radius=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.radius = radius
+
+    def _add(self, raw):
+        fill, stroke, width = self._style()
+        return raw.add_triangle(radius=self.radius, fill=fill, stroke=stroke, stroke_width=width)
 
 
 class Circle(VMobject):
@@ -733,6 +759,9 @@ class Table(Mobject):
         v_buff=0.25,
         line_color=WHITE,
         line_stroke_width=2.0,
+        row_labels=None,
+        col_labels=None,
+        top_left_entry=None,
     ):
         super().__init__()
         self.cells = cells
@@ -744,6 +773,22 @@ class Table(Mobject):
         self.v_buff = v_buff
         self.line_color = line_color
         self.line_stroke_width = line_stroke_width
+        self.row_labels = [str(x) for x in row_labels] if row_labels else []
+        self.col_labels = [str(x) for x in col_labels] if col_labels else []
+        self.top_left_entry = "" if top_left_entry is None else str(top_left_entry)
+
+    def _grid_cols(self):
+        data_cols = max((len(r) for r in self.cells), default=0)
+        return data_cols + (1 if self.row_labels else 0)
+
+    def add_highlighted_cell(self, pos, color=YELLOW, opacity=0.45):
+        row, col = int(pos[0]) - 1, int(pos[1]) - 1
+        index = row * self._grid_cols() + col
+
+        def op(raw, node):
+            raw.add_highlighted_cell(node, index, color=color, opacity=opacity)
+
+        return self._apply(op)
 
     def _add(self, raw):
         return raw.add_table(
@@ -756,6 +801,9 @@ class Table(Mobject):
             buff_y=self.v_buff,
             line_color=self.line_color,
             line_stroke_width=self.line_stroke_width,
+            row_labels=self.row_labels,
+            col_labels=self.col_labels,
+            top_left=self.top_left_entry,
         )
 
 
@@ -1100,6 +1148,33 @@ class LabeledLine(Mobject):
         x1, y1 = as_xy(self.start)
         x2, y2 = as_xy(self.end)
         return raw.add_labeled_line(
+            x1,
+            y1,
+            x2,
+            y2,
+            self.label,
+            direction=dir_name(self.direction),
+            buff=self.buff,
+            color=self.color,
+            font_size_pt=self.font_size,
+        )
+
+
+class LabeledArrow(Mobject):
+    def __init__(self, label, start, end, direction=None, buff=0.15, color=WHITE, font_size=36.0):
+        super().__init__()
+        self.label = label
+        self.start = start
+        self.end = end
+        self.direction = direction if direction is not None else (0.0, 1.0)
+        self.buff = buff
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        x1, y1 = as_xy(self.start)
+        x2, y2 = as_xy(self.end)
+        return raw.add_labeled_arrow(
             x1,
             y1,
             x2,

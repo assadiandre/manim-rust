@@ -8,15 +8,17 @@ use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
     add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace,
     add_complex_plane,
-    add_curved_arrow, add_dashed_copy, add_number_line, add_number_plane, add_polar_plane,
+    add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_number_line, add_number_plane,
+    add_polar_plane,
     add_riemann_rects, add_right_angle, add_surrounding_rect, add_underline, geometry, palette,
     AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_typst::{
     add_bar_chart_labeled, add_bulleted_list, add_code, add_complex_plane_labels, add_decimal,
-    add_decimal_atlas, add_graph_label, add_labeled_dot, add_labeled_line, add_markup, add_math,
-    add_math_table, add_matrix, add_number_line_labels, add_paragraph, add_table,
-    add_table_with_lines, add_text, add_title, digit_atlas, MathOptions,
+    add_decimal_atlas, add_graph_label, add_highlighted_cell, add_labeled_arrow, add_labeled_dot,
+    add_labeled_line, add_markup, add_math, add_math_table, add_matrix, add_number_line_labels,
+    add_paragraph, add_table, add_table_labeled, add_table_with_lines, add_text, add_title,
+    digit_atlas, MathOptions,
 };
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
@@ -1012,6 +1014,79 @@ pub fn probes() -> Vec<Probe> {
     )
     .expect("bars");
     out.push(probe("bars", s, &[0.0]));
+
+    // Table with row/col labels and a highlighted cell
+    let mut s = Scene::new();
+    let table = add_table_labeled(
+        &mut s.graph,
+        &[vec!["1".into(), "2".into()], vec!["3".into(), "4".into()]],
+        &["R1".into(), "R2".into()],
+        &["C1".into(), "C2".into()],
+        "+",
+        &MathOptions {
+            font_size_pt: 36.0,
+            ..MathOptions::default()
+        },
+        0.7,
+        0.45,
+        true,
+        true,
+        Style::default().with_stroke(palette::white(), 2.0),
+    )
+    .expect("tlabels");
+    add_highlighted_cell(&mut s.graph, table, 4, palette::yellow(), 0.5);
+    out.push(probe("tlabels", s, &[0.0]));
+
+    // Triangle, arc-between, curved double arrow, labeled arrow
+    let mut s = Scene::new();
+    s.add(
+        Mobject::new(geometry::triangle(Point::new(-3.4, 0.3), 1.1))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    s.add(
+        Mobject::new(geometry::arc_between_points(
+            Point::new(-1.6, -0.8),
+            Point::new(0.2, 1.1),
+            1.8,
+        ))
+        .with_style(Style::default().with_stroke(palette::yellow(), 5.0)),
+    );
+    add_curved_double_arrow(
+        &mut s.graph,
+        Point::new(0.6, -0.9),
+        Point::new(2.4, 1.0),
+        1.4,
+        Style::default().with_stroke(palette::teal(), 5.0),
+    );
+    add_labeled_arrow(
+        &mut s.graph,
+        Point::new(2.8, -1.1),
+        Point::new(5.0, 0.6),
+        "v",
+        manim_core::constants::UP,
+        0.18,
+        &MathOptions {
+            font_size_pt: 36.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("larrow");
+    out.push(probe("extras", s, &[0.0]));
+
+    // Write then Unwrite
+    let mut s = Scene::new();
+    let word = add_text(
+        &mut s.graph,
+        "Hi",
+        &MathOptions {
+            font_size_pt: 72.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("hi");
+    s.play_write(word, 1.0);
+    s.play_unwrite(word, 1.0);
+    out.push(probe("unwrite", s, &[0.0, 0.5, 1.0, 1.5, 2.0]));
 
     out
 }

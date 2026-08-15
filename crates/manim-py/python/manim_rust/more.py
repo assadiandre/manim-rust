@@ -99,6 +99,30 @@ class CurvedArrow(VMobject):
         )
 
 
+class CurvedDoubleArrow(VMobject):
+    def __init__(
+        self,
+        start,
+        end,
+        angle=1.5707963267948966,
+        color=WHITE,
+        stroke_width=6.0,
+        **kwargs,
+    ):
+        super().__init__(color=color, stroke_width=stroke_width, **kwargs)
+        self.start = start
+        self.end = end
+        self.angle = angle
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        x1, y1 = as_xy(self.start)
+        x2, y2 = as_xy(self.end)
+        return raw.add_curved_double_arrow(
+            x1, y1, x2, y2, sweep=self.angle, stroke=stroke, stroke_width=width
+        )
+
+
 class Angle(VMobject):
     def __init__(self, vertex, p1, p2, radius=0.4, **kwargs):
         super().__init__(**kwargs)

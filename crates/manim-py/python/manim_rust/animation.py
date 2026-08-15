@@ -41,6 +41,33 @@ class Write(Animation):
     kind = "write"
 
 
+class Unwrite(Animation):
+    kind = "unwrite"
+
+
+class Blink(Animation):
+    kind = "blink"
+
+
+class GrowArrow(Animation):
+    kind = "grow_arrow"
+
+
+class FocusOn(Animation):
+    kind = "focus_on"
+
+    def __init__(self, point, color=YELLOW, run_time=1.0, rate_func="smooth"):
+        super().__init__(None, run_time=run_time, rate_func=rate_func)
+        self.point = point
+        self.color = color
+
+    def _spec(self, raw, run_time=None, rate_func=None):
+        duration = run_time if run_time is not None else self.run_time
+        easing = rate_func if rate_func is not None else self.rate_func
+        x, y = as_xy(self.point)
+        return (self.kind, 0, duration, easing, x, y, self.color)
+
+
 class GrowFromCenter(Animation):
     kind = "grow"
 

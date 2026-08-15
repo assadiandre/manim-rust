@@ -21,6 +21,7 @@ use manim_core::{
     add_axes as rust_add_axes, add_background_rect as rust_add_background_rect,
     add_brace as rust_add_brace, add_complex_plane as rust_add_complex_plane,
     add_cross as rust_add_cross, add_curved_arrow as rust_add_curved_arrow,
+    add_curved_double_arrow as rust_add_curved_double_arrow,
     add_dashed_copy as rust_add_dashed_copy, add_double_arrow as rust_add_double_arrow,
     add_number_line as rust_add_number_line, add_number_plane as rust_add_number_plane,
     add_polar_plane as rust_add_polar_plane, add_riemann_rects as rust_add_riemann_rects,
@@ -33,8 +34,11 @@ use manim_render::{render_video, Renderer};
 use manim_typst::{
     add_axes_labels as rust_add_axes_labels, add_brace_label as rust_add_brace_label,
     add_graph_label as rust_add_graph_label,
+    add_highlighted_cell as rust_add_highlighted_cell,
+    add_labeled_arrow as rust_add_labeled_arrow,
     add_labeled_dot as rust_add_labeled_dot,
     add_labeled_line as rust_add_labeled_line,
+    add_table_labeled as rust_add_table_labeled,
     add_code as rust_add_code, add_decimal as rust_add_decimal, add_math,
     add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
     add_complex_plane_labels as rust_add_complex_plane_labels,
@@ -162,6 +166,44 @@ impl PyScene {
         Ok(self
             .scene
             .add(Mobject::new(geometry::square(Point::new(x, y), side)).with_style(style)))
+    }
+
+    #[pyo3(signature = (x = 0.0, y = 0.0, radius = 1.0, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_triangle(
+        &mut self,
+        x: f64,
+        y: f64,
+        radius: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::triangle(Point::new(x, y), radius)).with_style(style),
+        ))
+    }
+
+    #[pyo3(signature = (x1, y1, x2, y2, sweep = 1.5707963267948966, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_arc_between_points(
+        &mut self,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        sweep: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::arc_between_points(
+                Point::new(x1, y1),
+                Point::new(x2, y2),
+                sweep,
+            ))
+            .with_style(style),
+        ))
     }
 
     #[pyo3(signature = (x1, y1, x2, y2, stroke = Some("white".to_string()), stroke_width = 4.0))]
@@ -1060,6 +1102,27 @@ impl PyScene {
         ))
     }
 
+    #[pyo3(signature = (x1, y1, x2, y2, sweep = 1.5707963267948966, stroke = Some("white".to_string()), stroke_width = 6.0))]
+    fn add_curved_double_arrow(
+        &mut self,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        sweep: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_curved_double_arrow(
+            &mut self.scene.graph,
+            Point::new(x1, y1),
+            Point::new(x2, y2),
+            sweep,
+            style,
+        ))
+    }
+
     #[pyo3(signature = (vx, vy, x1, y1, x2, y2, radius = 0.4, stroke = Some("white".to_string()), stroke_width = 4.0))]
     fn add_angle(
         &mut self,
@@ -1271,6 +1334,52 @@ impl PyScene {
             &options,
         )
         .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (x1, y1, x2, y2, source, direction = "up", buff = 0.15, color = "white", font_size_pt = 36.0))]
+    fn add_labeled_arrow(
+        &mut self,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        source: &str,
+        direction: &str,
+        buff: f64,
+        color: &str,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: Some(parse_color(color)?),
+        };
+        rust_add_labeled_arrow(
+            &mut self.scene.graph,
+            Point::new(x1, y1),
+            Point::new(x2, y2),
+            source,
+            parse_direction(direction)?,
+            buff,
+            &options,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (table, index, color = "yellow_c", opacity = 0.45))]
+    fn add_highlighted_cell(
+        &mut self,
+        table: NodeId,
+        index: usize,
+        color: &str,
+        opacity: f32,
+    ) -> PyResult<usize> {
+        Ok(rust_add_highlighted_cell(
+            &mut self.scene.graph,
+            table,
+            index,
+            parse_color(color)?,
+            opacity,
+        ))
     }
 
     #[pyo3(signature = (target, buff = 0.15, fill = "black", opacity = 0.75))]
@@ -1696,7 +1805,10 @@ impl PyScene {
         buff_x = 0.25,
         buff_y = 0.25,
         line_color = None,
-        line_stroke_width = 2.0
+        line_stroke_width = 2.0,
+        row_labels = vec![],
+        col_labels = vec![],
+        top_left = String::new()
     ))]
     fn add_table(
         &mut self,
@@ -1709,6 +1821,9 @@ impl PyScene {
         buff_y: f64,
         line_color: Option<String>,
         line_stroke_width: f64,
+        row_labels: Vec<String>,
+        col_labels: Vec<String>,
+        top_left: String,
     ) -> PyResult<usize> {
         let options = MathOptions {
             font_size_pt,
@@ -1716,17 +1831,34 @@ impl PyScene {
         };
         let stroke = line_color.as_deref().unwrap_or("white");
         let style = build_style(None, Some(stroke), line_stroke_width)?;
-        rust_add_table_with_lines(
-            &mut self.scene.graph,
-            &cells,
-            &options,
-            buff_x,
-            buff_y,
-            include_inner_lines,
-            include_outer_lines,
-            style,
-        )
-        .map_err(|e| PyValueError::new_err(e.to_string()))
+        if row_labels.is_empty() && col_labels.is_empty() {
+            rust_add_table_with_lines(
+                &mut self.scene.graph,
+                &cells,
+                &options,
+                buff_x,
+                buff_y,
+                include_inner_lines,
+                include_outer_lines,
+                style,
+            )
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+        } else {
+            rust_add_table_labeled(
+                &mut self.scene.graph,
+                &cells,
+                &row_labels,
+                &col_labels,
+                &top_left,
+                &options,
+                buff_x,
+                buff_y,
+                include_inner_lines,
+                include_outer_lines,
+                style,
+            )
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+        }
     }
 
     #[pyo3(signature = (
@@ -2230,6 +2362,56 @@ impl PyScene {
                         an.start = i as f64 * each * lag;
                         anims.push(an);
                     }
+                }
+                "unwrite" => {
+                    let mut targets = path_targets(&self.scene.graph, target);
+                    targets.reverse();
+                    let n = targets.len();
+                    let lag = 0.1;
+                    let each = duration / (1.0 + (n.saturating_sub(1) as f64) * lag);
+                    for (i, id) in targets.into_iter().enumerate() {
+                        let mut an = Animation::uncreate(&self.scene.graph, id, each).with_easing(e);
+                        an.start = i as f64 * each * lag;
+                        anims.push(an);
+                    }
+                }
+                "blink" => {
+                    let half = (duration * 0.5).max(1e-3);
+                    anims.push(
+                        Animation::fade_out(&self.scene.graph, target, half).with_easing(e),
+                    );
+                    let mut fade_in =
+                        Animation::fade_in(&self.scene.graph, target, half).with_easing(e);
+                    fade_in.start = half;
+                    anims.push(fade_in);
+                }
+                "grow_arrow" => {
+                    let leaves = path_targets(&self.scene.graph, target);
+                    let about = match leaves.first() {
+                        Some(&id) => {
+                            let local =
+                                geometry::point_along(&self.scene.graph.get(id).path, 0.0);
+                            self.scene.graph.world_transform(id) * local
+                        }
+                        None => self.scene.graph.center_of(target),
+                    };
+                    anims.push(
+                        Animation::grow_from_point(&self.scene.graph, target, about, duration)
+                            .with_easing(e),
+                    );
+                }
+                "focus_on" => {
+                    let color = parse_color(if extra.is_empty() {
+                        "yellow"
+                    } else {
+                        extra.as_str()
+                    })?;
+                    let style = Style::default().no_fill().with_stroke(color, 6.0);
+                    let id = self.scene.add(
+                        Mobject::new(geometry::circle(Point::new(a, b), 1.6)).with_style(style),
+                    );
+                    anims.push(Animation::scale(&self.scene.graph, id, 0.08, duration).with_easing(e));
+                    anims.push(Animation::fade_out(&self.scene.graph, id, duration).with_easing(e));
                 }
                 "circumscribe" => {
                     let color = parse_color(if extra.is_empty() {
