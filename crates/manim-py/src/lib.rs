@@ -15,18 +15,23 @@ use manim_core::constants::{
 use manim_core::kurbo::{Point, Vec2};
 use manim_core::peniko::Color;
 use manim_core::{
-    add_angle as rust_add_angle, add_arrow as rust_add_arrow, add_axes as rust_add_axes,
+    add_angle as rust_add_angle, add_area_under as rust_add_area_under,
+    add_arrow as rust_add_arrow, add_axes as rust_add_axes,
     add_background_rect as rust_add_background_rect, add_brace as rust_add_brace,
-    add_cross as rust_add_cross, add_curved_arrow as rust_add_curved_arrow,
+    add_complex_plane as rust_add_complex_plane, add_cross as rust_add_cross,
+    add_curved_arrow as rust_add_curved_arrow, add_dashed_copy as rust_add_dashed_copy,
     add_double_arrow as rust_add_double_arrow, add_number_line as rust_add_number_line,
     add_number_plane as rust_add_number_plane, add_polar_plane as rust_add_polar_plane,
-    add_right_angle as rust_add_right_angle, add_surrounding_rect as rust_add_surrounding_rect,
-    add_underline as rust_add_underline, add_vector as rust_add_vector, geometry, palette,
-    AxesOpts, Mobject, NodeId, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, Style,
+    add_riemann_rects as rust_add_riemann_rects, add_right_angle as rust_add_right_angle,
+    add_surrounding_rect as rust_add_surrounding_rect, add_underline as rust_add_underline,
+    add_vector as rust_add_vector, geometry, palette, AxesOpts, Mobject, NodeId, NumberLineOpts,
+    NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_render::{render_video, Renderer};
 use manim_typst::{
-    add_brace_label as rust_add_brace_label, add_decimal as rust_add_decimal, add_math,
+    add_axes_labels as rust_add_axes_labels, add_brace_label as rust_add_brace_label,
+    add_code as rust_add_code, add_decimal as rust_add_decimal, add_math,
+    add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
     add_tex as add_latex, add_text as rust_add_text, add_title as rust_add_title, MathOptions,
 };
 
@@ -1049,6 +1054,224 @@ impl PyScene {
             .with_easing(parse_easing(easing)?);
         self.scene.play([a]);
         Ok(())
+    }
+
+    #[pyo3(signature = (target, num_dashes = 12, dashed_ratio = 0.5))]
+    fn add_dashed_copy(&mut self, target: NodeId, num_dashes: usize, dashed_ratio: f64) -> usize {
+        rust_add_dashed_copy(&mut self.scene.graph, target, num_dashes, dashed_ratio)
+    }
+
+    #[pyo3(signature = (x_min = -7.0, x_max = 7.0, y_min = -4.0, y_max = 4.0, faded_line_ratio = 1, grid = Some("blue_d".to_string()), axis = Some("white".to_string())))]
+    fn add_complex_plane(
+        &mut self,
+        x_min: f64,
+        x_max: f64,
+        y_min: f64,
+        y_max: f64,
+        faded_line_ratio: u32,
+        grid: Option<String>,
+        axis: Option<String>,
+    ) -> PyResult<usize> {
+        let grid_style = build_style(None, grid.as_deref(), 2.0)?;
+        let axis_style = build_style(None, axis.as_deref(), 3.0)?;
+        Ok(rust_add_complex_plane(
+            &mut self.scene.graph,
+            &NumberPlaneOpts {
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+                faded_line_ratio,
+                ..NumberPlaneOpts::default()
+            },
+            grid_style,
+            axis_style,
+        ))
+    }
+
+    /// Bake `f(x)` into a filled area under the curve (authoring-time only).
+    #[pyo3(signature = (f, x_min, x_max, samples = 80, unit_size = 1.0, fill = Some("blue".to_string()), opacity = 0.4))]
+    fn add_area(
+        &mut self,
+        f: Bound<'_, PyAny>,
+        x_min: f64,
+        x_max: f64,
+        samples: usize,
+        unit_size: f64,
+        fill: Option<String>,
+        opacity: f32,
+    ) -> PyResult<usize> {
+        let n = samples.max(2);
+        let mut ys = Vec::with_capacity(n);
+        for i in 0..n {
+            let t = i as f64 / (n - 1) as f64;
+            let x = x_min + (x_max - x_min) * t;
+            ys.push(f.call1((x,))?.extract::<f64>()?);
+        }
+        let mut style = build_style(fill.as_deref(), None, 0.0)?;
+        style.opacity = opacity;
+        Ok(rust_add_area_under(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            n,
+            unit_size,
+            unit_size,
+            |x| {
+                let t = (x - x_min) / (x_max - x_min).max(1e-9);
+                let i = (t * (n - 1) as f64).round().clamp(0.0, (n - 1) as f64) as usize;
+                ys[i]
+            },
+            style,
+        ))
+    }
+
+    /// Bake `f(x)` into Riemann rectangles (authoring-time only).
+    #[pyo3(signature = (f, x_min, x_max, n = 12, unit_size = 1.0, sample = "left", color_a = "blue", color_b = "green", opacity = 0.75))]
+    fn add_riemann(
+        &mut self,
+        f: Bound<'_, PyAny>,
+        x_min: f64,
+        x_max: f64,
+        n: usize,
+        unit_size: f64,
+        sample: &str,
+        color_a: &str,
+        color_b: &str,
+        opacity: f32,
+    ) -> PyResult<usize> {
+        let n = n.max(1);
+        let sample = match sample {
+            "left" => RiemannSample::Left,
+            "right" => RiemannSample::Right,
+            "center" => RiemannSample::Center,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "unknown riemann sample {other:?} (left/right/center)"
+                )))
+            }
+        };
+        let dx = (x_max - x_min) / n as f64;
+        let mut ys = Vec::with_capacity(n);
+        for i in 0..n {
+            let x0 = x_min + i as f64 * dx;
+            let xs = match sample {
+                RiemannSample::Left => x0,
+                RiemannSample::Right => x0 + dx,
+                RiemannSample::Center => x0 + 0.5 * dx,
+            };
+            ys.push(f.call1((xs,))?.extract::<f64>()?);
+        }
+        Ok(rust_add_riemann_rects(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            n,
+            unit_size,
+            unit_size,
+            |x| {
+                let t = (x - x_min) / dx;
+                let idx = match sample {
+                    RiemannSample::Left => t,
+                    RiemannSample::Right => t - 1.0,
+                    RiemannSample::Center => t - 0.5,
+                };
+                ys[idx.round().clamp(0.0, (n - 1) as f64) as usize]
+            },
+            sample,
+            parse_color(color_a)?,
+            parse_color(color_b)?,
+            opacity,
+        ))
+    }
+
+    #[pyo3(signature = (rows, font_size_pt = 42.0, color = None))]
+    fn add_matrix(
+        &mut self,
+        rows: Vec<Vec<f64>>,
+        font_size_pt: f64,
+        color: Option<String>,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_matrix(&mut self.scene.graph, &rows, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (source, font_size_pt = 28.0, color = None))]
+    fn add_code(
+        &mut self,
+        source: &str,
+        font_size_pt: f64,
+        color: Option<String>,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_code(&mut self.scene.graph, source, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (x_min = -4.0, x_max = 4.0, x_step = 1.0, unit_size = 1.0, include_tip = false, font_size_pt = 28.0))]
+    fn add_number_line_labels(
+        &mut self,
+        x_min: f64,
+        x_max: f64,
+        x_step: f64,
+        unit_size: f64,
+        include_tip: bool,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        rust_add_number_line_labels(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            x_step,
+            unit_size,
+            include_tip,
+            &MathOptions {
+                font_size_pt,
+                color: None,
+            },
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (x_min = -3.0, x_max = 3.0, y_min = -2.0, y_max = 2.0, unit_size = 1.0, include_tip = true, font_size_pt = 28.0))]
+    fn add_axes_labels(
+        &mut self,
+        x_min: f64,
+        x_max: f64,
+        y_min: f64,
+        y_max: f64,
+        unit_size: f64,
+        include_tip: bool,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        rust_add_axes_labels(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            1.0,
+            y_min,
+            y_max,
+            1.0,
+            unit_size,
+            include_tip,
+            &MathOptions {
+                font_size_pt,
+                color: None,
+            },
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (source, target, duration = 1.0))]
+    fn play_fade_transform(&mut self, source: NodeId, target: NodeId, duration: f64) {
+        self.scene.play_fade_transform(source, target, duration);
     }
 
     #[pyo3(signature = (target, color, duration = 1.0, easing = "smooth"))]

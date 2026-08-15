@@ -6,11 +6,15 @@ use kurbo::{Affine, Point, Vec2};
 use manim_anim::{Animation, Scene};
 use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
-    add_angle, add_arrow, add_axes, add_brace, add_curved_arrow, add_number_plane,
-    add_polar_plane, add_right_angle, add_surrounding_rect, add_underline, geometry, palette,
-    AxesOpts, Mobject, NumberPlaneOpts, PolarPlaneOpts, Style,
+    add_angle, add_area_under, add_arrow, add_axes, add_brace, add_complex_plane, add_curved_arrow,
+    add_dashed_copy, add_number_line, add_number_plane, add_polar_plane, add_riemann_rects,
+    add_right_angle, add_surrounding_rect, add_underline, geometry, palette, AxesOpts, Mobject,
+    NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
-use manim_typst::{add_decimal, add_math, add_text, add_title, MathOptions};
+use manim_typst::{
+    add_code, add_decimal, add_math, add_matrix, add_number_line_labels, add_text, add_title,
+    MathOptions,
+};
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
 /// formula (typeset in-process by typst) fades in above it.
@@ -492,6 +496,152 @@ pub fn probes() -> Vec<Probe> {
     );
     s.play_spin_in(star, 1.0);
     out.push(probe("spin", s, &[0.0, 0.35, 0.7, 1.0]));
+
+    // area + riemann under a parabola
+    let mut s = Scene::new();
+    add_axes(
+        &mut s.graph,
+        &AxesOpts {
+            x_min: -3.0,
+            x_max: 3.0,
+            y_min: -0.5,
+            y_max: 2.5,
+            unit_size: 1.0,
+            include_tip: true,
+            ..AxesOpts::default()
+        },
+        Style::default().with_stroke(palette::gray(), 3.0),
+    );
+    add_area_under(
+        &mut s.graph,
+        -2.2,
+        2.2,
+        80,
+        1.0,
+        1.0,
+        |x| 0.35 * x * x,
+        Style::filled(palette::blue()).no_stroke().with_opacity(0.35),
+    );
+    add_riemann_rects(
+        &mut s.graph,
+        -2.0,
+        2.0,
+        10,
+        1.0,
+        1.0,
+        |x| 0.35 * x * x,
+        RiemannSample::Left,
+        palette::teal(),
+        palette::green(),
+        0.7,
+    );
+    s.add(
+        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x))
+            .with_style(Style::default().with_stroke(palette::yellow(), 5.0).no_fill()),
+    );
+    out.push(probe("riemann", s, &[0.0]));
+
+    // dashed circle
+    let mut s = Scene::new();
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::new(-2.2, 0.0), 1.2))
+            .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+    );
+    let d = add_dashed_copy(&mut s.graph, c, 16, 0.55);
+    s.graph.shift(d, Vec2::new(4.4, 0.0));
+    s.graph.set_color(d, palette::gold());
+    out.push(probe("dashed", s, &[0.0]));
+
+    // complex plane + two points
+    let mut s = Scene::new();
+    add_complex_plane(
+        &mut s.graph,
+        &NumberPlaneOpts {
+            x_min: -4.0,
+            x_max: 4.0,
+            y_min: -2.5,
+            y_max: 2.5,
+            faded_line_ratio: 2,
+            ..NumberPlaneOpts::default()
+        },
+        Style::default()
+            .with_stroke(palette::blue_d(), 2.0)
+            .with_opacity(0.7),
+        Style::default().with_stroke(palette::white(), 3.0),
+    );
+    s.add(
+        Mobject::new(geometry::circle(Point::new(2.0, 1.0), 0.12))
+            .with_style(Style::filled(palette::yellow()).no_stroke()),
+    );
+    s.add(
+        Mobject::new(geometry::circle(Point::new(-3.0, -1.5), 0.12))
+            .with_style(Style::filled(palette::yellow()).no_stroke()),
+    );
+    out.push(probe("complex", s, &[0.0]));
+
+    // matrix
+    let mut s = Scene::new();
+    add_matrix(
+        &mut s.graph,
+        &[vec![1.0, 2.0], vec![3.0, 4.0]],
+        &MathOptions::default(),
+    )
+    .expect("matrix");
+    out.push(probe("matrix", s, &[0.0]));
+
+    // code listing
+    let mut s = Scene::new();
+    add_code(
+        &mut s.graph,
+        "fn main() {\n    println!(\"hi\");\n}",
+        &MathOptions {
+            font_size_pt: 28.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("code");
+    out.push(probe("code", s, &[0.0]));
+
+    // number line labels
+    let mut s = Scene::new();
+    add_number_line(
+        &mut s.graph,
+        &NumberLineOpts {
+            x_min: -3.0,
+            x_max: 3.0,
+            x_step: 1.0,
+            include_tip: true,
+            ..NumberLineOpts::default()
+        },
+        Style::default().with_stroke(palette::white(), 4.0),
+    );
+    add_number_line_labels(
+        &mut s.graph,
+        -3.0,
+        3.0,
+        1.0,
+        1.0,
+        true,
+        &MathOptions {
+            font_size_pt: 28.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("labels");
+    out.push(probe("labels", s, &[0.0]));
+
+    // fade transform: square → circle
+    let mut s = Scene::new();
+    let sq = s.add(
+        Mobject::new(geometry::square(Point::new(-2.5, 0.0), 1.6))
+            .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 4.0)),
+    );
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::new(2.5, 0.0), 0.9))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play_fade_transform(sq, c, 1.2);
+    out.push(probe("fadexform", s, &[0.0, 0.4, 0.8, 1.2]));
 
     out
 }

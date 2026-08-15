@@ -93,4 +93,8 @@ crates/
   Angle / RightAngle, PolarPlane, Title / DecimalNumber / BraceLabel,
   full Manim A–E palette lookup, MoveAlongPath / ShowPassingFlash /
   Flash / GrowFromPoint / SpinInFromNothing / ShrinkToCenter
+- M12 graphing + text extras: DashedVMobject, area-under-curve, Riemann
+  rectangles, ComplexPlane, number-line/axes labels, Matrix, Code,
+  FadeTransform (fade+travel, no stretch — Shift and Scale share one
+  transform property)
 - M8 (later) 3D spike: cube pass composited under 2D overlay
