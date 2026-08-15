@@ -33,6 +33,8 @@ use manim_render::{render_video, Renderer};
 use manim_typst::{
     add_axes_labels as rust_add_axes_labels, add_brace_label as rust_add_brace_label,
     add_graph_label as rust_add_graph_label,
+    add_labeled_dot as rust_add_labeled_dot,
+    add_labeled_line as rust_add_labeled_line,
     add_code as rust_add_code, add_decimal as rust_add_decimal, add_math,
     add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
     add_complex_plane_labels as rust_add_complex_plane_labels,
@@ -1121,6 +1123,61 @@ impl PyScene {
             plot,
             source,
             x,
+            parse_direction(direction)?,
+            buff,
+            &options,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (x, y, source, direction = "up", buff = 0.15, color = "white", font_size_pt = 36.0))]
+    fn add_labeled_dot(
+        &mut self,
+        x: f64,
+        y: f64,
+        source: &str,
+        direction: &str,
+        buff: f64,
+        color: &str,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: Some(parse_color(color)?),
+        };
+        rust_add_labeled_dot(
+            &mut self.scene.graph,
+            Point::new(x, y),
+            source,
+            parse_direction(direction)?,
+            buff,
+            &options,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (x1, y1, x2, y2, source, direction = "up", buff = 0.15, color = "white", font_size_pt = 36.0))]
+    fn add_labeled_line(
+        &mut self,
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        source: &str,
+        direction: &str,
+        buff: f64,
+        color: &str,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: Some(parse_color(color)?),
+        };
+        rust_add_labeled_line(
+            &mut self.scene.graph,
+            Point::new(x1, y1),
+            Point::new(x2, y2),
+            source,
             parse_direction(direction)?,
             buff,
             &options,

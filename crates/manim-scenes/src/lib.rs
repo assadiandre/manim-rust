@@ -13,7 +13,8 @@ use manim_core::{
     AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_typst::{
-    add_code, add_complex_plane_labels, add_decimal, add_decimal_atlas, add_graph_label, add_math,
+    add_code, add_complex_plane_labels, add_decimal, add_decimal_atlas, add_graph_label,
+    add_labeled_dot, add_labeled_line, add_math,
     add_matrix, add_number_line_labels, add_table, add_text, add_title, digit_atlas, MathOptions,
 };
 
@@ -859,6 +860,38 @@ pub fn probes() -> Vec<Probe> {
         .collect();
     s.play_lagged(anims, 0.45);
     out.push(probe("lagged", s, &[0.0, 0.35, 0.7, 1.1, 1.6]));
+
+    // LabeledDot / LabeledLine
+    let mut s = Scene::new();
+    add_labeled_dot(
+        &mut s.graph,
+        Point::new(-2.2, 0.4),
+        "A",
+        manim_core::constants::UP,
+        0.18,
+        &MathOptions::default(),
+    )
+    .expect("A");
+    add_labeled_dot(
+        &mut s.graph,
+        Point::new(2.2, 0.4),
+        "B",
+        manim_core::constants::UP,
+        0.18,
+        &MathOptions::default(),
+    )
+    .expect("B");
+    add_labeled_line(
+        &mut s.graph,
+        Point::new(-2.2, 0.4),
+        Point::new(2.2, 0.4),
+        "c",
+        manim_core::constants::DOWN,
+        0.2,
+        &MathOptions::default(),
+    )
+    .expect("c");
+    out.push(probe("labeled", s, &[0.0]));
 
     out
 }

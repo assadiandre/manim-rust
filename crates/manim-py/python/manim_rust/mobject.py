@@ -101,6 +101,10 @@ class Mobject:
 
         return self._apply(op)
 
+    def generate_target(self):
+        self.target = _Target()
+        return self.target
+
     def set_z_index(self, z):
         def op(raw, node):
             raw.set_z_index(node, z)
@@ -825,6 +829,74 @@ class _AxesRiemann(Mobject):
             color_a=self.color,
             color_b=self.color,
             opacity=self.opacity,
+        )
+
+
+class _Target:
+    """Records shift/move_to for `MoveToTarget` (authoring-time only)."""
+
+    def __init__(self):
+        self.delta = None
+        self.point = None
+
+    def shift(self, delta):
+        x, y = as_xy(delta)
+        dx, dy = self.delta or (0.0, 0.0)
+        self.delta = (dx + x, dy + y)
+        return self
+
+    def move_to(self, point):
+        self.point = point
+        return self
+
+
+class LabeledDot(Mobject):
+    def __init__(self, label, point=None, direction=None, buff=0.15, color=WHITE, font_size=36.0):
+        super().__init__()
+        self.label = label
+        self.point = point or (0.0, 0.0)
+        self.direction = direction if direction is not None else (0.0, 1.0)
+        self.buff = buff
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        x, y = as_xy(self.point)
+        return raw.add_labeled_dot(
+            x,
+            y,
+            self.label,
+            direction=dir_name(self.direction),
+            buff=self.buff,
+            color=self.color,
+            font_size_pt=self.font_size,
+        )
+
+
+class LabeledLine(Mobject):
+    def __init__(self, label, start, end, direction=None, buff=0.15, color=WHITE, font_size=36.0):
+        super().__init__()
+        self.label = label
+        self.start = start
+        self.end = end
+        self.direction = direction if direction is not None else (0.0, 1.0)
+        self.buff = buff
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        x1, y1 = as_xy(self.start)
+        x2, y2 = as_xy(self.end)
+        return raw.add_labeled_line(
+            x1,
+            y1,
+            x2,
+            y2,
+            self.label,
+            direction=dir_name(self.direction),
+            buff=self.buff,
+            color=self.color,
+            font_size_pt=self.font_size,
         )
 
 

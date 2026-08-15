@@ -111,4 +111,6 @@ crates/
   (no per-frame Python), LaggedStart compiled to staggered start offsets.
 - M17 Axes.plot / get_area / get_riemann_rectangles bake a Python `f(x)`
   at authoring time; RoundedRectangle, AnnularSector, BackgroundRectangle.
+- M18 LabeledDot / LabeledLine (Typst label + geometry group) and
+  MoveToTarget from `generate_target()` shift/move_to records.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

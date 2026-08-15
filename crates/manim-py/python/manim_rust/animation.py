@@ -255,6 +255,24 @@ class LaggedStart(AnimationGroup):
         super().__init__(*anims, lag_ratio=lag_ratio, **kwargs)
 
 
+class MoveToTarget(Animation):
+    """Shift a mobject to the delta recorded on `generate_target()`."""
+
+    kind = "shift"
+
+    def _spec(self, raw, run_time=None, rate_func=None):
+        kind, target, duration, easing, _, _, extra = super()._spec(raw, run_time, rate_func)
+        tgt = getattr(self.mobject, "target", None)
+        if tgt is None:
+            raise ValueError("MoveToTarget requires mobject.generate_target()")
+        if tgt.point is not None:
+            x, y = as_xy(tgt.point)
+            cx, cy = raw.center_of(target)
+            return (kind, target, duration, easing, x - cx, y - cy, extra)
+        dx, dy = tgt.delta if tgt.delta is not None else (0.0, 0.0)
+        return (kind, target, duration, easing, dx, dy, extra)
+
+
 class _BoundAnim(Animation):
     """Result of `mobject.animate.shift(...)` and friends."""
 
