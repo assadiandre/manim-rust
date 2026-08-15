@@ -134,6 +134,39 @@ fn golden_m22_static() {
 }
 
 #[test]
+fn golden_m23_static() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    for name in ["texparts", "graph", "digraph", "tangent"] {
+        let scene = manim_scenes::probes()
+            .into_iter()
+            .find(|p| p.name == name)
+            .unwrap_or_else(|| panic!("{name} probe"));
+        let mut sim = scene.scene.graph.clone();
+        scene.scene.timeline.apply(&mut sim, 0.0);
+        let px = r.render_frame(&mut sim).unwrap().to_vec();
+        assert_golden(&px, 480, 270, &format!("{name}.png"));
+    }
+}
+
+#[test]
+fn golden_m23_anims() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    for (name, times) in [("subsets", [0.0, 0.9, 1.5].as_slice()), ("cyclic", &[0.0, 0.5, 1.0])]
+    {
+        let scene = manim_scenes::probes()
+            .into_iter()
+            .find(|p| p.name == name)
+            .unwrap_or_else(|| panic!("{name} probe"));
+        for &t in times {
+            let mut sim = scene.scene.graph.clone();
+            scene.scene.timeline.apply(&mut sim, t);
+            let px = r.render_frame(&mut sim).unwrap().to_vec();
+            assert_golden(&px, 480, 270, &format!("{name}_{t:.1}.png"));
+        }
+    }
+}
+
+#[test]
 fn golden_m22_unwrite() {
     let scene = manim_scenes::probes()
         .into_iter()

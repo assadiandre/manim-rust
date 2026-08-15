@@ -226,8 +226,19 @@ class TransformMatchingShapes(Animation):
         return (kind, target, duration, easing, float(other), 0.0, extra)
 
 
-class TransformMatchingTex(TransformMatchingShapes):
-    """Same pairing as shapes: Typst glyphs have no TeX-string map yet."""
+class TransformMatchingTex(Animation):
+    """Pair `tex-part:` children by TeX substring, else fall back to shapes."""
+
+    kind = "transform_matching_tex"
+
+    def __init__(self, mobject, target_mobject, **kwargs):
+        super().__init__(mobject, **kwargs)
+        self.target_mobject = target_mobject
+
+    def _spec(self, raw, run_time=None, rate_func=None):
+        kind, target, duration, easing, _, _, extra = super()._spec(raw, run_time, rate_func)
+        other = _node_id(self.target_mobject, raw)
+        return (kind, target, duration, easing, float(other), 0.0, extra)
 
 
 class FadeTransform(Animation):
@@ -280,6 +291,33 @@ class LaggedStart(AnimationGroup):
 
     def __init__(self, *anims, lag_ratio=0.05, **kwargs):
         super().__init__(*anims, lag_ratio=lag_ratio, **kwargs)
+
+
+class ShowIncreasingSubsets(Animation):
+    kind = "show_increasing_subsets"
+
+
+class CyclicReplace(Animation):
+    """Each mobject travels to the next one's center; last wraps to first."""
+
+    kind = "cyclic_replace"
+
+    def __init__(self, *mobjects, run_time=1.0, rate_func="smooth"):
+        first = mobjects[0] if mobjects else None
+        super().__init__(first, run_time=run_time, rate_func=rate_func)
+        self.mobjects = mobjects
+
+    def _spec(self, raw, run_time=None, rate_func=None):
+        duration = run_time if run_time is not None else self.run_time
+        easing = rate_func if rate_func is not None else self.rate_func
+        ids = [_node_id(m, raw) for m in self.mobjects]
+        target = ids[0] if ids else 0
+        extra = ",".join(str(i) for i in ids)
+        return (self.kind, target, duration, easing, 0.0, 0.0, extra)
+
+
+class SpiralIn(SpinInFromNothing):
+    """Alias of SpinInFromNothing (CE name)."""
 
 
 class MoveToTarget(Animation):

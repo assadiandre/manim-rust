@@ -26,7 +26,9 @@ use manim_core::{
     add_number_line as rust_add_number_line, add_number_plane as rust_add_number_plane,
     add_polar_plane as rust_add_polar_plane, add_riemann_rects as rust_add_riemann_rects,
     add_right_angle as rust_add_right_angle, add_surrounding_rect as rust_add_surrounding_rect,
-    add_underline as rust_add_underline, add_vector as rust_add_vector, geometry, palette,
+    add_tangent_line as rust_add_tangent_line, add_underline as rust_add_underline,
+    add_vector as rust_add_vector, add_vertical_line_to_graph as rust_add_vertical_line_to_graph,
+    geometry, palette,
     AxesOpts, Mobject, NodeId, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample,
     Style,
 };
@@ -49,8 +51,10 @@ use manim_typst::{
     add_numbered_list as rust_add_numbered_list,
     add_paragraph as rust_add_paragraph,
     add_table_with_lines as rust_add_table_with_lines,
-    add_tex as add_latex, add_text as rust_add_text, add_title as rust_add_title,
-    digit_atlas, MathOptions,
+    add_tex as add_latex, add_tex_parts as rust_add_tex_parts, add_text as rust_add_text,
+    add_title as rust_add_title, add_graph_labeled as rust_add_graph_labeled,
+    digit_atlas, part_by_tex as rust_part_by_tex, set_color_by_tex as rust_set_color_by_tex,
+    MathOptions,
 };
 
 fn parse_color(s: &str) -> PyResult<Color> {
@@ -251,6 +255,140 @@ impl PyScene {
         let id = result.map_err(|e| PyValueError::new_err(e.to_string()))?;
         self.scene.graph.get_mut(id).transform = manim_core::kurbo::Affine::translate((x, y));
         Ok(id)
+    }
+
+    /// Multi-part MathTex. Each string (and `{{...}}` splits) becomes a named
+    /// `tex-part:` child so `set_color_by_tex` can match substrings.
+    #[pyo3(signature = (parts, color = None, font_size_pt = 48.0, syntax = "latex"))]
+    fn add_tex_parts(
+        &mut self,
+        parts: Vec<String>,
+        color: Option<String>,
+        font_size_pt: f64,
+        syntax: &str,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        let latex = match syntax {
+            "latex" => true,
+            "typst" => false,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "unknown syntax {other:?} (expected \"latex\" or \"typst\")"
+                )))
+            }
+        };
+        rust_add_tex_parts(&mut self.scene.graph, &parts, &options, latex)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    fn set_color_by_tex(&mut self, group: NodeId, tex: &str, color: &str) -> PyResult<usize> {
+        Ok(rust_set_color_by_tex(
+            &mut self.scene.graph,
+            group,
+            tex,
+            parse_color(color)?,
+        ))
+    }
+
+    fn part_by_tex(&self, group: NodeId, tex: &str) -> Option<NodeId> {
+        rust_part_by_tex(&self.scene.graph, group, tex)
+    }
+
+    #[pyo3(signature = (
+        vertices,
+        edges,
+        layout = "circular",
+        labels = false,
+        layout_scale = 2.5,
+        vertex_radius = 0.16,
+        directed = false,
+        vertex_color = "blue",
+        edge_color = "white",
+    ))]
+    fn add_graph(
+        &mut self,
+        vertices: Vec<String>,
+        edges: Vec<(String, String)>,
+        layout: &str,
+        labels: bool,
+        layout_scale: f64,
+        vertex_radius: f64,
+        directed: bool,
+        vertex_color: &str,
+        edge_color: &str,
+    ) -> PyResult<usize> {
+        let mut index = std::collections::HashMap::new();
+        for (i, v) in vertices.iter().enumerate() {
+            index.insert(v.clone(), i);
+        }
+        let mut pairs = Vec::new();
+        for (a, b) in &edges {
+            let ia = index.get(a).copied().ok_or_else(|| {
+                PyValueError::new_err(format!("edge vertex {a:?} is not in vertices"))
+            })?;
+            let ib = index.get(b).copied().ok_or_else(|| {
+                PyValueError::new_err(format!("edge vertex {b:?} is not in vertices"))
+            })?;
+            pairs.push((ia, ib));
+        }
+        rust_add_graph_labeled(
+            &mut self.scene.graph,
+            &vertices,
+            &pairs,
+            layout,
+            layout_scale,
+            directed,
+            vertex_radius,
+            Style::filled(parse_color(vertex_color)?),
+            Style::default().with_stroke(parse_color(edge_color)?, 3.0),
+            labels,
+            &MathOptions {
+                font_size_pt: 24.0,
+                color: Some(palette::white()),
+            },
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
+    #[pyo3(signature = (plot, x, length = 2.0, stroke = Some("yellow".to_string()), stroke_width = 4.0))]
+    fn add_tangent_line(
+        &mut self,
+        plot: NodeId,
+        x: f64,
+        length: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_tangent_line(
+            &mut self.scene.graph,
+            plot,
+            x,
+            length,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (plot, x, y0 = 0.0, stroke = Some("white".to_string()), stroke_width = 3.0))]
+    fn add_vertical_line_to_graph(
+        &mut self,
+        plot: NodeId,
+        x: f64,
+        y0: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        Ok(rust_add_vertical_line_to_graph(
+            &mut self.scene.graph,
+            plot,
+            x,
+            y0,
+            style,
+        ))
     }
 
     #[pyo3(signature = (x = 0.0, y = 0.0, width = 3.0, height = 2.0, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
@@ -996,6 +1134,14 @@ impl PyScene {
     fn set_color(&mut self, target: NodeId, color: &str) -> PyResult<()> {
         self.scene.graph.set_color(target, parse_color(color)?);
         Ok(())
+    }
+
+    fn set_opacity(&mut self, target: NodeId, opacity: f32) {
+        self.scene.graph.set_opacity(target, opacity);
+    }
+
+    fn children_of(&self, target: NodeId) -> Vec<NodeId> {
+        self.scene.graph.children_of(target).to_vec()
     }
 
     fn scale(&mut self, target: NodeId, factor: f64) {
@@ -2454,6 +2600,58 @@ impl PyScene {
                             .into_iter()
                             .map(|an| an.with_easing(e)),
                     );
+                }
+                "transform_matching_tex" => {
+                    let dest = a as usize;
+                    anims.extend(
+                        self.scene
+                            .transform_matching_tex_anims(target, dest, duration)
+                            .into_iter()
+                            .map(|an| an.with_easing(e)),
+                    );
+                }
+                "show_increasing_subsets" => {
+                    let kids = {
+                        let c = self.scene.graph.children_of(target);
+                        if c.is_empty() {
+                            path_targets(&self.scene.graph, target)
+                        } else {
+                            c.to_vec()
+                        }
+                    };
+                    let n = kids.len();
+                    let lag = 0.5;
+                    let each = duration / (1.0 + (n.saturating_sub(1) as f64) * lag);
+                    for (i, id) in kids.into_iter().enumerate() {
+                        let mut an =
+                            Animation::fade_in(&self.scene.graph, id, each).with_easing(e);
+                        an.start = i as f64 * each * lag;
+                        anims.push(an);
+                    }
+                }
+                "cyclic_replace" => {
+                    let ids: Vec<NodeId> = extra
+                        .split(',')
+                        .filter_map(|s| s.parse::<usize>().ok())
+                        .collect();
+                    if ids.len() >= 2 {
+                        let centers: Vec<_> = ids
+                            .iter()
+                            .map(|&id| self.scene.graph.center_of(id))
+                            .collect();
+                        for (i, &id) in ids.iter().enumerate() {
+                            let dest = centers[(i + 1) % centers.len()];
+                            anims.push(
+                                Animation::shift(
+                                    &self.scene.graph,
+                                    id,
+                                    dest - centers[i],
+                                    duration,
+                                )
+                                .with_easing(e),
+                            );
+                        }
+                    }
                 }
                 "changing_decimal" => {
                     let places = extra.parse::<usize>().unwrap_or(2);

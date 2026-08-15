@@ -8,16 +8,17 @@ use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
     add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace,
     add_complex_plane,
-    add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_number_line, add_number_plane,
-    add_polar_plane,
-    add_riemann_rects, add_right_angle, add_surrounding_rect, add_underline, geometry, palette,
+    add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_graph, add_number_line,
+    add_number_plane, add_polar_plane, add_riemann_rects, add_right_angle, add_surrounding_rect,
+    add_tangent_line, add_underline, add_vertical_line_to_graph, geometry, layout_graph, palette,
     AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_typst::{
     add_bar_chart_labeled, add_bulleted_list, add_code, add_complex_plane_labels, add_decimal,
     add_decimal_atlas, add_graph_label, add_highlighted_cell, add_labeled_arrow, add_labeled_dot,
     add_labeled_line, add_markup, add_math, add_math_table, add_matrix, add_number_line_labels,
-    add_paragraph, add_table, add_table_labeled, add_table_with_lines, add_text, add_title,
+    add_graph_labeled, add_paragraph, add_table, add_table_labeled, add_table_with_lines, add_tex_parts,
+    add_text, add_title, set_color_by_tex,
     digit_atlas, MathOptions,
 };
 
@@ -1087,6 +1088,125 @@ pub fn probes() -> Vec<Probe> {
     s.play_write(word, 1.0);
     s.play_unwrite(word, 1.0);
     out.push(probe("unwrite", s, &[0.0, 0.5, 1.0, 1.5, 2.0]));
+
+    // ShowIncreasingSubsets: three dots appear one after another
+    let mut s = Scene::new();
+    let dots = [
+        s.add(
+            Mobject::new(geometry::circle(Point::new(-1.6, 0.0), 0.35))
+                .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 3.0)),
+        ),
+        s.add(
+            Mobject::new(geometry::circle(Point::new(0.0, 0.0), 0.35))
+                .with_style(Style::filled(palette::yellow()).with_stroke(palette::white(), 3.0)),
+        ),
+        s.add(
+            Mobject::new(geometry::circle(Point::new(1.6, 0.0), 0.35))
+                .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 3.0)),
+        ),
+    ];
+    let g = s.graph.group_nodes(&dots);
+    s.play_show_increasing_subsets(g, 1.5);
+    out.push(probe("subsets", s, &[0.0, 0.4, 0.9, 1.5]));
+
+    // CyclicReplace: two squares swap places
+    let mut s = Scene::new();
+    let left = s.add(
+        Mobject::new(geometry::square(Point::new(-1.8, 0.0), 1.1))
+            .with_style(Style::filled(palette::teal()).with_stroke(palette::white(), 4.0)),
+    );
+    let right = s.add(
+        Mobject::new(geometry::square(Point::new(1.8, 0.0), 1.1))
+            .with_style(Style::filled(palette::purple()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play_cyclic_replace(&[left, right], 1.0);
+    out.push(probe("cyclic", s, &[0.0, 0.5, 1.0]));
+
+    // MathTex parts + set_color_by_tex
+    let mut s = Scene::new();
+    let eq = add_tex_parts(
+        &mut s.graph,
+        &["a^2".into(), "+".into(), "b^2".into(), "=".into(), "c^2".into()],
+        &MathOptions {
+            font_size_pt: 56.0,
+            ..MathOptions::default()
+        },
+        true,
+    )
+    .expect("texparts");
+    set_color_by_tex(&mut s.graph, eq, "a^2", palette::red());
+    set_color_by_tex(&mut s.graph, eq, "b^2", palette::blue());
+    set_color_by_tex(&mut s.graph, eq, "c^2", palette::yellow());
+    out.push(probe("texparts", s, &[0.0]));
+
+    // Network graph with labels
+    let mut s = Scene::new();
+    add_graph_labeled(
+        &mut s.graph,
+        &["A".into(), "B".into(), "C".into(), "D".into()],
+        &[(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)],
+        "circular",
+        2.2,
+        false,
+        0.18,
+        Style::filled(palette::blue()).with_stroke(palette::white(), 2.0),
+        Style::default().with_stroke(palette::white(), 3.0),
+        true,
+        &MathOptions {
+            font_size_pt: 26.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("graph");
+    out.push(probe("graph", s, &[0.0]));
+
+    // Directed tree graph
+    let mut s = Scene::new();
+    let pos = layout_graph(4, &[(0, 1), (0, 2), (2, 3)], "tree", 2.0);
+    add_graph(
+        &mut s.graph,
+        &pos,
+        &[(0, 1), (0, 2), (2, 3)],
+        true,
+        0.16,
+        Style::filled(palette::teal()).with_stroke(palette::white(), 2.0),
+        Style::default().with_stroke(palette::yellow(), 3.0),
+    );
+    out.push(probe("digraph", s, &[0.0]));
+
+    // Tangent + vertical line on y = 0.35 x^2
+    let mut s = Scene::new();
+    let axes = add_axes(
+        &mut s.graph,
+        &AxesOpts {
+            x_min: -2.5,
+            x_max: 2.5,
+            y_min: -0.5,
+            y_max: 2.5,
+            ..AxesOpts::default()
+        },
+        Style::default().with_stroke(palette::white(), 3.0),
+    );
+    let plot = s.graph.add_child(
+        axes,
+        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x))
+            .with_style(Style::default().with_stroke(palette::yellow(), 5.0)),
+    );
+    add_tangent_line(
+        &mut s.graph,
+        plot,
+        1.2,
+        2.2,
+        Style::default().with_stroke(palette::red(), 4.0),
+    );
+    add_vertical_line_to_graph(
+        &mut s.graph,
+        plot,
+        1.2,
+        0.0,
+        Style::default().with_stroke(palette::teal(), 3.0),
+    );
+    out.push(probe("tangent", s, &[0.0]));
 
     out
 }

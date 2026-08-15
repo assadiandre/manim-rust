@@ -101,6 +101,12 @@ class Mobject:
 
         return self._apply(op)
 
+    def set_opacity(self, opacity):
+        def op(raw, node):
+            raw.set_opacity(node, float(opacity))
+
+        return self._apply(op)
+
     def generate_target(self):
         self.target = _Target()
         return self.target
@@ -337,6 +343,20 @@ class Rectangle(VMobject):
         )
 
 
+class ScreenRectangle(Rectangle):
+    """16:9 rectangle (Manim `ScreenRectangle`)."""
+
+    def __init__(self, aspect_ratio=16.0 / 9.0, height=4.0, **kwargs):
+        super().__init__(width=aspect_ratio * height, height=height, **kwargs)
+
+
+class FullScreenRectangle(Rectangle):
+    """Frame-filling rectangle (Manim `FullScreenRectangle`)."""
+
+    def __init__(self, **kwargs):
+        super().__init__(width=8.0 * 16.0 / 9.0, height=8.0, **kwargs)
+
+
 class RoundedRectangle(Rectangle):
     def __init__(self, width=3.0, height=2.0, corner_radius=0.25, **kwargs):
         super().__init__(width=width, height=height, **kwargs)
@@ -477,20 +497,88 @@ class Paragraph(Mobject):
         )
 
 
-class MathTex(Mobject):
-    def __init__(self, source, color=WHITE, font_size=48.0):
+class _BoundMobject(Mobject):
+    """Already-materialized node (MathTex parts, graph vertices)."""
+
+    def __init__(self, raw, node_id):
         super().__init__()
-        self.source = source
-        self.color = color
-        self.font_size = font_size
+        self._raw = raw
+        self._id = node_id
 
     def _add(self, raw):
-        return raw.add_tex(
-            self.source,
+        return self._id
+
+
+class _DeferredTexPart(Mobject):
+    """`eq[i]` before the parent MathTex is added to a scene."""
+
+    def __init__(self, parent, index):
+        super().__init__()
+        self._parent = parent
+        self._index = index
+
+    def _add(self, raw):
+        pid = self._parent._materialize(raw)
+        kids = raw.children_of(pid)
+        self._id = kids[self._index] if kids else pid
+        self._raw = raw
+        return self._id
+
+    def set_color(self, color):
+        idx = self._index
+
+        def op(raw, node):
+            kids = raw.children_of(node)
+            raw.set_color(kids[idx] if kids else node, color)
+
+        return self._parent._apply(op)
+
+
+class MathTex(Mobject):
+    def __init__(self, *tex_strings, color=WHITE, font_size=48.0):
+        super().__init__()
+        if not tex_strings:
+            tex_strings = ("",)
+        self.tex_strings = [str(s) for s in tex_strings]
+        self.source = "".join(self.tex_strings)
+        self.color = color
+        self.font_size = font_size
+        self.submobjects = []
+
+    def _add(self, raw):
+        nid = raw.add_tex_parts(
+            self.tex_strings,
             color=self.color,
             font_size_pt=self.font_size,
             syntax="latex",
         )
+        kids = raw.children_of(nid)
+        self.submobjects = [_BoundMobject(raw, cid) for cid in kids]
+        if not self.submobjects:
+            self.submobjects = [_BoundMobject(raw, nid)]
+        return nid
+
+    def __getitem__(self, i):
+        if self._id is None:
+            return _DeferredTexPart(self, i)
+        return self.submobjects[i]
+
+    def __len__(self):
+        return len(self.tex_strings)
+
+    def set_color_by_tex(self, tex, color):
+        def op(raw, node):
+            raw.set_color_by_tex(node, tex, color)
+
+        return self._apply(op)
+
+    def get_part_by_tex(self, tex):
+        if self._id is None:
+            raise RuntimeError("get_part_by_tex requires the mobject to be added first")
+        pid = self._raw.part_by_tex(self._id, tex)
+        if pid is None:
+            return None
+        return _BoundMobject(self._raw, pid)
 
 
 class Tex(MathTex):
@@ -746,6 +834,13 @@ class Axes(Mobject):
         n = max(1, int(round((xr[1] - xr[0]) / dx)))
         return _AxesRiemann(graph, xr[0], xr[1], n, color=color, opacity=fill_opacity)
 
+    def get_tangent_line(self, graph, x, length=2.0, **kwargs):
+        return TangentLine(graph, x=x, length=length, **kwargs)
+
+    def get_vertical_line_to_graph(self, x, graph, line_func=None, **kwargs):
+        del line_func
+        return VerticalLineToGraph(graph, x=x, **kwargs)
+
 
 class Table(Mobject):
     def __init__(
@@ -954,6 +1049,93 @@ class BarChart(Mobject):
             fill_opacity=self.bar_fill_opacity,
             stroke_width=self.bar_stroke_width,
             font_size_pt=self.font_size,
+        )
+
+
+class Graph(Mobject):
+    """Network graph. Layout is baked at authoring time (no NetworkX)."""
+
+    def __init__(
+        self,
+        vertices,
+        edges,
+        layout="circular",
+        labels=False,
+        layout_scale=2.5,
+        vertex_radius=0.16,
+        directed=False,
+        vertex_color=BLUE,
+        edge_color=WHITE,
+        **kwargs,
+    ):
+        super().__init__()
+        self.vertices = list(vertices)
+        self.edges = list(edges)
+        self.layout = layout
+        self.labels = labels
+        self.layout_scale = layout_scale
+        self.vertex_radius = vertex_radius
+        self.directed = directed
+        self.vertex_color = vertex_color
+        self.edge_color = edge_color
+        self.vertex_config = kwargs.get("vertex_config") or {}
+        self.edge_config = kwargs.get("edge_config") or {}
+
+    def _add(self, raw):
+        verts = [str(v) for v in self.vertices]
+        edges = [(str(a), str(b)) for a, b in self.edges]
+        return raw.add_graph(
+            verts,
+            edges,
+            layout=self.layout,
+            labels=self.labels,
+            layout_scale=self.layout_scale,
+            vertex_radius=self.vertex_radius,
+            directed=self.directed,
+            vertex_color=self.vertex_color,
+            edge_color=self.edge_color,
+        )
+
+
+class DiGraph(Graph):
+    def __init__(self, vertices, edges, **kwargs):
+        kwargs["directed"] = True
+        super().__init__(vertices, edges, **kwargs)
+
+
+class TangentLine(VMobject):
+    def __init__(self, mobject, x=1.0, length=2.0, **kwargs):
+        super().__init__(**kwargs)
+        self.target = mobject
+        self.x = x
+        self.length = length
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        return raw.add_tangent_line(
+            _node_id(self.target, raw),
+            self.x,
+            self.length,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
+class VerticalLineToGraph(VMobject):
+    def __init__(self, mobject, x=1.0, y0=0.0, **kwargs):
+        super().__init__(**kwargs)
+        self.target = mobject
+        self.x = x
+        self.y0 = y0
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        return raw.add_vertical_line_to_graph(
+            _node_id(self.target, raw),
+            self.x,
+            self.y0,
+            stroke=stroke,
+            stroke_width=width,
         )
 
 
