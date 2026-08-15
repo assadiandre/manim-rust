@@ -175,6 +175,63 @@ fn tex_textcolor_applies_via_shim() {
 }
 
 #[test]
+fn markup_bold_compiles_glyphs() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_markup;
+    let mut g = SceneGraph::new();
+    let id = add_markup(
+        &mut g,
+        "<b>Bold</b> and <i>italic</i>",
+        &MathOptions::default(),
+    )
+    .unwrap();
+    assert!(
+        !g.path_leaves(id).is_empty(),
+        "expected markup glyphs"
+    );
+}
+
+#[test]
+fn paragraph_three_lines() {
+    use manim_core::SceneGraph;
+    use manim_typst::add_paragraph;
+    let mut g = SceneGraph::new();
+    let id = add_paragraph(
+        &mut g,
+        "one\ntwo\nthree",
+        0.3,
+        Some("left"),
+        &MathOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(g.children_of(id).len(), 3);
+    assert_eq!(g.get(id).name.as_deref(), Some("paragraph"));
+}
+
+#[test]
+fn table_with_outer_lines_adds_rules() {
+    use manim_core::{SceneGraph, Style};
+    use manim_typst::add_table_with_lines;
+    let mut g = SceneGraph::new();
+    let id = add_table_with_lines(
+        &mut g,
+        &[vec!["a".into(), "b".into()], vec!["c".into(), "d".into()]],
+        &MathOptions::default(),
+        0.8,
+        0.5,
+        true,
+        true,
+        Style::default().with_stroke(manim_core::palette::white(), 2.0),
+    )
+    .unwrap();
+    assert!(
+        g.path_leaves(id).len() > 4,
+        "cells plus grid lines, got {}",
+        g.path_leaves(id).len()
+    );
+}
+
+#[test]
 fn table_two_by_two_has_four_cells() {
     use manim_core::SceneGraph;
     use manim_typst::add_table;

@@ -18,6 +18,10 @@
 //! - we collect everything in pt space, then flip y and scale pt -> logical
 //!   units (1 unit = `PT_PER_UNIT` pt), centered on the content's bbox.
 
+mod markup;
+
+pub use markup::pango_to_typst;
+
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
@@ -578,6 +582,75 @@ pub fn add_text(
     Ok(add_group(scene, parts, source))
 }
 
+/// Pango-or-Typst markup (Manim `MarkupText`). Span colors are kept by
+/// compiling with no fill override and baking the default color into Typst.
+pub fn add_markup(
+    scene: &mut manim_core::SceneGraph,
+    source: &str,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let mut body = pango_to_typst(source);
+    if let Some(c) = options.color {
+        let r = c.to_rgba8();
+        body = format!(
+            "#set text(fill: rgb({}, {}, {}))\n{body}",
+            r.r, r.g, r.b
+        );
+    }
+    let compile = MathOptions {
+        font_size_pt: options.font_size_pt,
+        color: None,
+    };
+    add_text(scene, &body, &compile)
+}
+
+/// Hard-broken lines arranged downward (Manim `Paragraph`).
+pub fn add_paragraph(
+    scene: &mut manim_core::SceneGraph,
+    source: &str,
+    line_spacing: f64,
+    alignment: Option<&str>,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let lines: Vec<&str> = source.split('\n').collect();
+    if lines.is_empty() {
+        return add_markup(scene, " ", options);
+    }
+    let mut ids = Vec::with_capacity(lines.len());
+    for line in lines {
+        let text = if line.is_empty() { " " } else { line };
+        ids.push(add_markup(scene, text, options)?);
+    }
+    let group = scene.group_nodes(&ids);
+    scene.get_mut(group).name = Some("paragraph".into());
+    let buff = if line_spacing < 0.0 {
+        manim_core::constants::DEFAULT_MOBJECT_TO_MOBJECT_BUFFER
+    } else {
+        line_spacing
+    };
+    scene.arrange(group, manim_core::constants::DOWN, buff, true);
+    if let Some(align) = alignment {
+        let kids: Vec<_> = scene.children_of(group).to_vec();
+        let gbox = scene.bounding_box(group);
+        match align.to_ascii_lowercase().as_str() {
+            "left" => {
+                for &id in &kids {
+                    let x0 = scene.bounding_box(id).x0;
+                    scene.shift(id, kurbo::Vec2::new(gbox.x0 - x0, 0.0));
+                }
+            }
+            "right" => {
+                for &id in &kids {
+                    let x1 = scene.bounding_box(id).x1;
+                    scene.shift(id, kurbo::Vec2::new(gbox.x1 - x1, 0.0));
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(group)
+}
+
 /// Plain text parked on the top edge (Manim `Title`).
 pub fn add_title(
     scene: &mut manim_core::SceneGraph,
@@ -651,6 +724,17 @@ pub fn add_table(
     cells: &[Vec<String>],
     options: &MathOptions,
 ) -> Result<manim_core::NodeId, TypstError> {
+    let buff = manim_core::constants::DEFAULT_MOBJECT_TO_MOBJECT_BUFFER;
+    add_table_arranged(scene, cells, options, buff, buff)
+}
+
+fn add_table_arranged(
+    scene: &mut manim_core::SceneGraph,
+    cells: &[Vec<String>],
+    options: &MathOptions,
+    buff_x: f64,
+    buff_y: f64,
+) -> Result<manim_core::NodeId, TypstError> {
     if cells.is_empty() {
         return Err(TypstError::Compile("empty table".into()));
     }
@@ -669,9 +753,126 @@ pub fn add_table(
     }
     let group = scene.group_nodes(&ids);
     scene.get_mut(group).name = Some("table".into());
-    let buff = manim_core::constants::DEFAULT_MOBJECT_TO_MOBJECT_BUFFER;
-    scene.arrange_in_grid(group, Some(rows), Some(cols), buff, buff, true);
+    scene.arrange_in_grid(group, Some(rows), Some(cols), buff_x, buff_y, true);
     Ok(group)
+}
+
+/// Table plus baked h/v rules (Manim `include_inner_lines` / `include_outer_lines`).
+pub fn add_table_with_lines(
+    scene: &mut manim_core::SceneGraph,
+    cells: &[Vec<String>],
+    options: &MathOptions,
+    buff_x: f64,
+    buff_y: f64,
+    include_inner_lines: bool,
+    include_outer_lines: bool,
+    line_style: Style,
+) -> Result<manim_core::NodeId, TypstError> {
+    let table = add_table_arranged(scene, cells, options, buff_x, buff_y)?;
+    if !include_inner_lines && !include_outer_lines {
+        return Ok(table);
+    }
+    let rows = cells.len();
+    let cols = cells.iter().map(|r| r.len()).max().unwrap_or(0);
+    let cell_ids: Vec<_> = scene.children_of(table).to_vec();
+    let lines = add_table_grid_lines(
+        scene,
+        &cell_ids,
+        rows,
+        cols,
+        buff_x,
+        buff_y,
+        include_inner_lines,
+        include_outer_lines,
+        line_style,
+    );
+    let group = scene.group_nodes(&[table, lines]);
+    scene.get_mut(group).name = Some("table".into());
+    Ok(group)
+}
+
+fn union_cells(
+    scene: &manim_core::SceneGraph,
+    cells: &[manim_core::NodeId],
+    rows: usize,
+    cols: usize,
+    row: Option<usize>,
+    col: Option<usize>,
+) -> kurbo::Rect {
+    let mut acc: Option<kurbo::Rect> = None;
+    for r in 0..rows {
+        if row.is_some_and(|rr| rr != r) {
+            continue;
+        }
+        for c in 0..cols {
+            if col.is_some_and(|cc| cc != c) {
+                continue;
+            }
+            let i = r * cols + c;
+            if i >= cells.len() {
+                continue;
+            }
+            let b = scene.bounding_box(cells[i]);
+            acc = Some(match acc {
+                None => b,
+                Some(a) => a.union(b),
+            });
+        }
+    }
+    acc.unwrap_or_else(|| kurbo::Rect::from_center_size(Point::ORIGIN, (0.0, 0.0)))
+}
+
+fn add_table_grid_lines(
+    scene: &mut manim_core::SceneGraph,
+    cells: &[manim_core::NodeId],
+    rows: usize,
+    cols: usize,
+    buff_x: f64,
+    buff_y: f64,
+    include_inner: bool,
+    include_outer: bool,
+    style: Style,
+) -> manim_core::NodeId {
+    let mut ids = Vec::new();
+    if rows == 0 || cols == 0 || cells.is_empty() {
+        return scene.group_nodes(&ids);
+    }
+    let row_bb: Vec<_> = (0..rows)
+        .map(|r| union_cells(scene, cells, rows, cols, Some(r), None))
+        .collect();
+    let col_bb: Vec<_> = (0..cols)
+        .map(|c| union_cells(scene, cells, rows, cols, None, Some(c)))
+        .collect();
+    let left = col_bb[0].x0 - 0.5 * buff_x;
+    let right = col_bb[cols - 1].x1 + 0.5 * buff_x;
+    let top = row_bb[0].y1 + 0.5 * buff_y;
+    let bottom = row_bb[rows - 1].y0 - 0.5 * buff_y;
+
+    let mut add_line = |a: Point, b: Point| {
+        ids.push(
+            scene.add(Mobject::new(manim_core::geometry::line(a, b)).with_style(style.clone())),
+        );
+    };
+
+    if include_outer {
+        add_line(Point::new(left, top), Point::new(right, top));
+        add_line(Point::new(left, bottom), Point::new(right, bottom));
+        add_line(Point::new(left, bottom), Point::new(left, top));
+        add_line(Point::new(right, bottom), Point::new(right, top));
+    }
+    if include_inner {
+        for k in 0..rows.saturating_sub(1) {
+            let y = 0.5 * (row_bb[k].y0 + row_bb[k + 1].y1);
+            add_line(Point::new(left, y), Point::new(right, y));
+        }
+        for k in 0..cols.saturating_sub(1) {
+            let x = 0.5 * (col_bb[k].x1 + col_bb[k + 1].x0);
+            add_line(Point::new(x, bottom), Point::new(x, top));
+        }
+    }
+    let group = scene.group_nodes(&ids);
+    scene.get_mut(group).name = Some("table_lines".into());
+    group
 }
 
 fn escape_typst_string(s: &str) -> String {
