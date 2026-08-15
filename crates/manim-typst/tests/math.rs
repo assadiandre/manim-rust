@@ -240,6 +240,43 @@ fn digit_atlas_composes_two_digit_number() {
 }
 
 #[test]
+fn graph_label_sits_right_of_yx_plot() {
+    use manim_core::constants::RIGHT;
+    use manim_core::geometry;
+    use manim_core::{Mobject, SceneGraph};
+    use manim_typst::add_graph_label;
+    let mut g = SceneGraph::new();
+    let plot = g.add(Mobject::new(geometry::plot(-2.0, 2.0, 17, 1.0, 1.0, |x| x)));
+    let id = add_graph_label(
+        &mut g,
+        plot,
+        "f(x)",
+        1.0,
+        RIGHT,
+        0.25,
+        &MathOptions::default(),
+    )
+    .unwrap();
+    let left = g.critical_point(id, manim_core::constants::LEFT);
+    let center = g.center_of(id);
+    assert!(
+        (left.x - 1.25).abs() < 1e-6,
+        "label left x={} expected 1.25",
+        left.x
+    );
+    assert!(
+        (center.y - 1.0).abs() < 1e-6,
+        "label center y={} expected 1.0",
+        center.y
+    );
+    assert!(
+        center.x > 1.0,
+        "label center should be to the right of (1,1)"
+    );
+    assert_eq!(g.get(id).name.as_deref(), Some("graph_label"));
+}
+
+#[test]
 fn complex_plane_labels_include_i() {
     use manim_core::SceneGraph;
     use manim_typst::add_complex_plane_labels;

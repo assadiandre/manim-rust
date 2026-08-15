@@ -163,10 +163,18 @@ pub fn arrow_tip(start: Point, end: Point, tip_length: f64, tip_width: f64) -> B
     }
     let dir = v / len;
     let tip = tip_length.min(len * 0.45).max(0.0);
-    let width = if tip_width <= 0.0 { tip * 0.7 } else { tip_width };
+    let width = if tip_width <= 0.0 {
+        tip * 0.7
+    } else {
+        tip_width
+    };
     let perp = Vec2::new(-dir.y, dir.x);
     let base = end - dir * tip;
-    polygon(&[end, base + perp * (width * 0.5), base - perp * (width * 0.5)])
+    polygon(&[
+        end,
+        base + perp * (width * 0.5),
+        base - perp * (width * 0.5),
+    ])
 }
 
 pub fn default_tip_length(length: f64) -> f64 {
@@ -228,8 +236,7 @@ pub fn star(center: Point, n: usize, outer: f64, inner: Option<f64>, rotation: f
     let inner_r = inner.unwrap_or_else(|| {
         let density = 2.0_f64;
         let outer_angle = std::f64::consts::TAU * density / n as f64;
-        let inverse_x =
-            1.0 - inner_angle.tan() * ((outer_angle.cos() - 1.0) / outer_angle.sin());
+        let inverse_x = 1.0 - inner_angle.tan() * ((outer_angle.cos() - 1.0) / outer_angle.sin());
         outer / (inner_angle.cos() * inverse_x)
     });
     let mut pts = Vec::with_capacity(2 * n);
@@ -262,13 +269,7 @@ pub fn arc_between_points(start: Point, end: Point, sweep: f64) -> BezPath {
 }
 
 /// Ring slice (Manim `AnnularSector`).
-pub fn annular_sector(
-    center: Point,
-    inner: f64,
-    outer: f64,
-    start: f64,
-    sweep: f64,
-) -> BezPath {
+pub fn annular_sector(center: Point, inner: f64, outer: f64, start: f64, sweep: f64) -> BezPath {
     let n = 32.max((sweep.abs() * 24.0) as usize);
     let mut p = BezPath::new();
     for i in 0..=n {
@@ -319,7 +320,11 @@ pub fn right_angle(vertex: Point, p1: Point, p2: Point, size: f64) -> BezPath {
             v / len
         }
     };
-    polyline(&[vertex + n1 * size, vertex + n1 * size + n2 * size, vertex + n2 * size])
+    polyline(&[
+        vertex + n1 * size,
+        vertex + n1 * size + n2 * size,
+        vertex + n2 * size,
+    ])
 }
 
 pub fn cubic_bezier(p0: Point, p1: Point, p2: Point, p3: Point) -> BezPath {
@@ -353,8 +358,47 @@ pub fn tangent_along(path: &BezPath, t: f64) -> Vec2 {
     }
 }
 
+/// Point on a polyline whose x-coordinate matches `x` (lerp in the bracketing
+/// segment). Out-of-range `x` snaps to the nearer endpoint.
+pub fn point_at_x(path: &BezPath, x: f64) -> Point {
+    let (pts, _) = flatten_points(path);
+    if pts.is_empty() {
+        return Point::ORIGIN;
+    }
+    if pts.len() == 1 {
+        return pts[0];
+    }
+    for w in pts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let (lo, hi) = if a.x <= b.x { (a.x, b.x) } else { (b.x, a.x) };
+        if x >= lo - 1e-12 && x <= hi + 1e-12 {
+            let dx = b.x - a.x;
+            let t = if dx.abs() < 1e-12 {
+                0.0
+            } else {
+                (x - a.x) / dx
+            };
+            return a.lerp(b, t);
+        }
+    }
+    let first = pts[0];
+    let last = pts[pts.len() - 1];
+    if (x - first.x).abs() <= (x - last.x).abs() {
+        first
+    } else {
+        last
+    }
+}
+
 /// Sample `f` on `[x_min, x_max]` into a polyline, scaled into scene units.
-pub fn plot(x_min: f64, x_max: f64, samples: usize, unit_x: f64, unit_y: f64, f: impl Fn(f64) -> f64) -> BezPath {
+pub fn plot(
+    x_min: f64,
+    x_max: f64,
+    samples: usize,
+    unit_x: f64,
+    unit_y: f64,
+    f: impl Fn(f64) -> f64,
+) -> BezPath {
     let n = samples.max(2);
     let mut pts = Vec::with_capacity(n);
     for i in 0..n {
@@ -529,7 +573,14 @@ pub fn trim(path: &BezPath, t0: f64, t1: f64) -> BezPath {
     }
     let count = ((t1 - t0).abs() * n as f64).ceil().max(2.0) as usize;
     let out: Vec<Point> = (0..count)
-        .map(|i| point_at_length(&pts, &cum, closed, s0 + (s1 - s0) * i as f64 / (count - 1) as f64))
+        .map(|i| {
+            point_at_length(
+                &pts,
+                &cum,
+                closed,
+                s0 + (s1 - s0) * i as f64 / (count - 1) as f64,
+            )
+        })
         .collect();
     points_to_path(&out, false)
 }

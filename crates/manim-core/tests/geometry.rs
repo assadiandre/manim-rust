@@ -30,7 +30,10 @@ fn trim_half_is_half_length() {
     let half = geometry::trim(&c, 0.0, 0.5);
     let len = geometry::path_length(&half);
     let full = geometry::path_length(&c);
-    assert!((len - full / 2.0).abs() / full < 0.02, "len={len} full={full}");
+    assert!(
+        (len - full / 2.0).abs() / full < 0.02,
+        "len={len} full={full}"
+    );
 }
 
 #[test]
@@ -60,7 +63,10 @@ fn dashed_line_is_shorter_than_solid() {
     let b = Point::new(2.0, 0.0);
     let solid = geometry::path_length(&geometry::line(a, b));
     let dashed = geometry::path_length(&geometry::dashed_line(a, b, 0.2, 0.2));
-    assert!(dashed < solid * 0.7 && dashed > solid * 0.3, "dashed={dashed} solid={solid}");
+    assert!(
+        dashed < solid * 0.7 && dashed > solid * 0.3,
+        "dashed={dashed} solid={solid}"
+    );
 }
 
 #[test]
@@ -69,7 +75,11 @@ fn arrow_shaft_stops_before_tip() {
     let end = Point::new(2.0, 0.0);
     let shaft = geometry::arrow_shaft(start, end, 0.4);
     let bb = geometry::bounding_box(&shaft);
-    assert!(bb.x1 < 2.0 - 0.3, "shaft should end before the tip, x1={}", bb.x1);
+    assert!(
+        bb.x1 < 2.0 - 0.3,
+        "shaft should end before the tip, x1={}",
+        bb.x1
+    );
 }
 
 #[test]
@@ -80,6 +90,16 @@ fn plot_samples_a_parabola() {
     assert!(pts.len() >= 9);
     assert!((pts[0].y - 1.0).abs() < 1e-9);
     assert!(pts[4].y.abs() < 1e-9); // x=0
+}
+
+#[test]
+fn point_at_x_on_yx_line() {
+    let p = geometry::plot(-2.0, 2.0, 17, 1.0, 1.0, |x| x);
+    let pt = geometry::point_at_x(&p, 1.0);
+    assert!(
+        (pt.x - 1.0).abs() < 1e-9 && (pt.y - 1.0).abs() < 1e-9,
+        "{pt:?}"
+    );
 }
 
 #[test]
@@ -102,7 +122,10 @@ fn arc_between_points_quarter_circle() {
     assert!((len - PI / 2.0).abs() < 0.05, "len={len}");
     let start = geometry::point_along(&a, 0.0);
     let end = geometry::point_along(&a, 1.0);
-    assert!((start.x - 1.0).abs() < 0.02 && start.y.abs() < 0.02, "{start:?}");
+    assert!(
+        (start.x - 1.0).abs() < 0.02 && start.y.abs() < 0.02,
+        "{start:?}"
+    );
     assert!(end.x.abs() < 0.02 && (end.y - 1.0).abs() < 0.02, "{end:?}");
 }
 
@@ -135,7 +158,10 @@ fn dashed_path_is_shorter_with_subpaths() {
     let almost_solid = geometry::dashed_path(&solid, 8, 1.0);
     assert!(!almost_solid.elements().is_empty());
     let al = geometry::path_length(&almost_solid);
-    assert!(al > sl * 0.8 && al < sl, "ratio=1.0-ish len={al} solid={sl}");
+    assert!(
+        al > sl * 0.8 && al < sl,
+        "ratio=1.0-ish len={al} solid={sl}"
+    );
 }
 
 #[test]

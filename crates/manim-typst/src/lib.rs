@@ -761,6 +761,23 @@ pub fn add_number_line_labels(
     Ok(scene.group_nodes(&ids))
 }
 
+/// Math label next to a baked plot at path-local `x` (Manim `Axes.get_graph_label`).
+pub fn add_graph_label(
+    scene: &mut manim_core::SceneGraph,
+    plot_id: manim_core::NodeId,
+    source: &str,
+    x: f64,
+    direction: kurbo::Vec2,
+    buff: f64,
+    options: &MathOptions,
+) -> Result<manim_core::NodeId, TypstError> {
+    let point = manim_core::plot_point_at_x(scene, plot_id, x);
+    let id = add_math(scene, source, options)?;
+    scene.next_to_point(id, point, direction, buff);
+    scene.get_mut(id).name = Some("graph_label".into());
+    Ok(id)
+}
+
 /// Axis tick labels: x below the axis, y to the left. Origin is labeled
 /// only on x so "0" is not drawn twice.
 pub fn add_axes_labels(
@@ -820,9 +837,7 @@ fn union_glyph_paths(parts: &[Mobject]) -> BezPath {
 }
 
 /// Local builder: one `(char, outline, advance)` triple per atlas glyph.
-fn digit_atlas_glyphs(
-    options: &MathOptions,
-) -> Result<Vec<(char, BezPath, f64)>, TypstError> {
+fn digit_atlas_glyphs(options: &MathOptions) -> Result<Vec<(char, BezPath, f64)>, TypstError> {
     let mut glyphs = Vec::with_capacity(ATLAS_CHARS.len());
     for &ch in ATLAS_CHARS {
         let parts = text_mobjects(&atlas_char_source(ch), options)?;

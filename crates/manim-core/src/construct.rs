@@ -215,6 +215,12 @@ pub fn axes_c2p(opts: &AxesOpts, x: f64, y: f64) -> Point {
     Point::new(x * opts.unit_size, y * opts.unit_size)
 }
 
+/// World-space point on a baked plot at path-local `x` (parent transforms apply).
+pub fn plot_point_at_x(graph: &SceneGraph, plot_id: NodeId, x: f64) -> Point {
+    let local = geometry::point_at_x(&graph.get(plot_id).path, x);
+    graph.world_transform(plot_id) * local
+}
+
 /// Arrow from the origin to `end` (Manim `Vector`).
 pub fn add_vector(graph: &mut SceneGraph, end: Point, style: Style) -> NodeId {
     add_arrow(graph, Point::ORIGIN, end, 0.0, 0.0, style)
@@ -998,5 +1004,21 @@ mod tests {
         let n = g.children_of(id).len();
         assert!(n >= 9, "expected a 3x3 field of arrows, got {n}");
         assert_eq!(g.get(id).name.as_deref(), Some("arrow_field"));
+    }
+
+    #[test]
+    fn plot_point_at_x_follows_parent_transform() {
+        let mut g = SceneGraph::new();
+        let axes = add_axes(&mut g, &AxesOpts::default(), Style::default());
+        let plot = g.add_child(
+            axes,
+            Mobject::new(geometry::plot(-2.0, 2.0, 17, 1.0, 1.0, |x| x)),
+        );
+        g.shift(axes, kurbo::Vec2::new(2.0, 0.5));
+        let p = plot_point_at_x(&g, plot, 1.0);
+        assert!(
+            (p.x - 3.0).abs() < 1e-9 && (p.y - 1.5).abs() < 1e-9,
+            "{p:?}"
+        );
     }
 }
