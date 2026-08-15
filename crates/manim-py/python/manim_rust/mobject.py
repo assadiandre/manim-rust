@@ -962,6 +962,39 @@ class NumberedList(Mobject):
         )
 
 
+class ImplicitFunction(VMobject):
+    """Isoline `f(x, y) = 0`, sampled once at authoring time."""
+
+    def __init__(
+        self,
+        function,
+        x_range=(-3.0, 3.0),
+        y_range=(-2.0, 2.0),
+        color=YELLOW,
+        stroke_width=4.0,
+        **kwargs,
+    ):
+        super().__init__(color=color, stroke_width=stroke_width, fill_opacity=0.0, **kwargs)
+        self.function = function
+        self.x_range = x_range
+        self.y_range = y_range
+
+    def _add(self, raw):
+        _, stroke, width = self._style()
+        xr, yr = self.x_range, self.y_range
+        return raw.add_implicit(
+            self.function,
+            xr[0],
+            xr[1],
+            yr[0],
+            yr[1],
+            nx=int(xr[2]) if len(xr) > 2 else 48,
+            ny=int(yr[2]) if len(yr) > 2 else 32,
+            stroke=stroke,
+            stroke_width=width,
+        )
+
+
 class FunctionGraph(VMobject):
     def __init__(self, function, x_range=(-7.0, 7.0), color=YELLOW, stroke_width=4.0, **kwargs):
         super().__init__(color=color, stroke_width=stroke_width, fill_opacity=0.0, **kwargs)

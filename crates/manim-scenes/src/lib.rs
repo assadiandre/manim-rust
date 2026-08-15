@@ -8,7 +8,8 @@ use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
     add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace,
     add_complex_plane,
-    add_boolean, add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_graph, add_number_line,
+    add_boolean, add_curved_arrow, add_curved_double_arrow, add_dashed_copy, add_graph,
+    add_implicit_curve, add_number_line,
     add_svg,
     add_number_plane, add_polar_plane, add_riemann_rects, add_right_angle, add_surrounding_rect,
     add_tangent_line, add_underline, add_vertical_line_to_graph, geometry, layout_graph, palette,
@@ -1268,6 +1269,54 @@ pub fn probes() -> Vec<Probe> {
     s.graph.get_mut(e).visible = false;
     s.graph.get_mut(f).visible = false;
     out.push(probe("boolean", s, &[0.0]));
+
+    // ImplicitFunction: unit circle + a hyperbola
+    let mut s = Scene::new();
+    add_implicit_curve(
+        &mut s.graph,
+        -2.4,
+        2.4,
+        -1.6,
+        1.6,
+        56,
+        40,
+        |x, y| x * x + y * y - 1.0,
+        Style::default().with_stroke(palette::yellow(), 5.0),
+    );
+    add_implicit_curve(
+        &mut s.graph,
+        -2.4,
+        2.4,
+        -1.6,
+        1.6,
+        56,
+        40,
+        |x, y| x * x - y * y - 0.6,
+        Style::default().with_stroke(palette::teal(), 4.0),
+    );
+    out.push(probe("implicit", s, &[0.0]));
+
+    // ApplyWave on a horizontal line
+    let mut s = Scene::new();
+    let wave = s.add(
+        Mobject::new(geometry::line(Point::new(-3.2, 0.0), Point::new(3.2, 0.0)))
+            .with_style(Style::default().with_stroke(palette::yellow(), 6.0)),
+    );
+    s.play_apply_wave(wave, 1.0);
+    out.push(probe("wave", s, &[0.0, 0.5, 1.0]));
+
+    // FadeTransform stretch: small circle → large square
+    let mut s = Scene::new();
+    let tiny = s.add(
+        Mobject::new(geometry::circle(Point::new(-2.6, 0.0), 0.35))
+            .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 4.0)),
+    );
+    let big = s.add(
+        Mobject::new(geometry::square(Point::new(2.4, 0.0), 2.2))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play_fade_transform(tiny, big, 1.2);
+    out.push(probe("stretch", s, &[0.0, 0.6, 1.2]));
 
     out
 }

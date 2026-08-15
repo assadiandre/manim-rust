@@ -26,7 +26,8 @@ use manim_core::{
     add_number_line as rust_add_number_line, add_number_plane as rust_add_number_plane,
     add_polar_plane as rust_add_polar_plane, add_riemann_rects as rust_add_riemann_rects,
     add_right_angle as rust_add_right_angle, add_surrounding_rect as rust_add_surrounding_rect,
-    add_boolean as rust_add_boolean, add_svg as rust_add_svg,
+    add_boolean as rust_add_boolean, add_implicit_curve as rust_add_implicit_curve,
+    add_svg as rust_add_svg,
     add_tangent_line as rust_add_tangent_line, add_underline as rust_add_underline,
     add_vector as rust_add_vector, add_vertical_line_to_graph as rust_add_vertical_line_to_graph,
     geometry, palette, BooleanOp,
@@ -748,6 +749,45 @@ impl PyScene {
         Ok(self
             .scene
             .add(Mobject::new(geometry::polyline(&points)).with_style(style)))
+    }
+
+    /// Bake `f(x, y) -> float` into an isoline (authoring-time only).
+    #[pyo3(signature = (f, x_min = -3.0, x_max = 3.0, y_min = -2.0, y_max = 2.0, nx = 48, ny = 32, stroke = Some("yellow".to_string()), stroke_width = 4.0))]
+    fn add_implicit(
+        &mut self,
+        f: Bound<'_, PyAny>,
+        x_min: f64,
+        x_max: f64,
+        y_min: f64,
+        y_max: f64,
+        nx: usize,
+        ny: usize,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        let err = std::cell::RefCell::new(None);
+        let id = rust_add_implicit_curve(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+            nx,
+            ny,
+            |x, y| match f.call1((x, y)).and_then(|v| v.extract::<f64>()) {
+                Ok(v) => v,
+                Err(e) => {
+                    *err.borrow_mut() = Some(e);
+                    1.0
+                }
+            },
+            style,
+        );
+        if let Some(e) = err.into_inner() {
+            return Err(e);
+        }
+        Ok(id)
     }
 
     fn add_group(&mut self, ids: Vec<NodeId>) -> usize {
@@ -2604,19 +2644,18 @@ impl PyScene {
                 }
                 "fade_transform" => {
                     let dest = a as usize;
-                    let src_c = self.scene.graph.center_of(target);
-                    let dst_c = self.scene.graph.center_of(dest);
-                    let delta = dst_c - src_c;
-                    let fade_out =
-                        Animation::fade_out(&self.scene.graph, target, duration).with_easing(e);
-                    let shift_src =
-                        Animation::shift(&self.scene.graph, target, delta, duration).with_easing(e);
-                    self.scene.graph.move_to(dest, src_c);
-                    let fade_in =
-                        Animation::fade_in(&self.scene.graph, dest, duration).with_easing(e);
-                    let shift_dst =
-                        Animation::shift(&self.scene.graph, dest, delta, duration).with_easing(e);
-                    anims.extend([fade_out, shift_src, fade_in, shift_dst]);
+                    anims.extend(
+                        self.scene
+                            .fade_transform_anims(target, dest, duration)
+                            .into_iter()
+                            .map(|an| an.with_easing(e)),
+                    );
+                }
+                "apply_wave" => {
+                    anims.push(
+                        Animation::apply_wave(&self.scene.graph, target, 0.25, 2.0, duration)
+                            .with_easing(e),
+                    );
                 }
                 "transform_matching" => {
                     let dest = a as usize;

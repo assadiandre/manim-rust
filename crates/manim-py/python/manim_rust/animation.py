@@ -241,6 +241,10 @@ class TransformMatchingTex(Animation):
         return (kind, target, duration, easing, float(other), 0.0, extra)
 
 
+class ApplyWave(Animation):
+    kind = "apply_wave"
+
+
 class FadeTransform(Animation):
     kind = "fade_transform"
 

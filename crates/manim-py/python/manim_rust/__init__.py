@@ -23,6 +23,7 @@ The procedural NodeId API still works::
 from manim_rust.animation import (
     Animation,
     AnimationGroup,
+    ApplyWave,
     Blink,
     Circumscribe,
     Create,
@@ -158,6 +159,7 @@ from manim_rust.mobject import (
     Dot,
     FullScreenRectangle,
     FunctionGraph,
+    ImplicitFunction,
     Graph,
     Ellipse,
     GraphLabel,
@@ -223,6 +225,7 @@ from manim_rust.scene import Scene
 __all__ = [
     "Animation",
     "AnimationGroup",
+    "ApplyWave",
     "ArcBetweenPoints",
     "Blink",
     "Angle",
@@ -260,6 +263,7 @@ __all__ = [
     "Difference",
     "DiGraph",
     "FunctionGraph",
+    "ImplicitFunction",
     "FullScreenRectangle",
     "Graph",
     "DARK_BLUE",
