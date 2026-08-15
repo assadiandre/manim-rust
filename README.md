@@ -46,24 +46,28 @@ cargo run -p manim-cli --release -- visual-check   # contact sheets for review
 ```bash
 pip install maturin
 maturin develop -m crates/manim-py/Cargo.toml   # or: maturin build + pip install
+python examples/ce_style.py
 python examples/demo.py
 ```
 
+If an older install left a `site-packages/manim_rust/` directory (extension-only
+module), remove it so the new Python package overlay is imported.
+
 ```python
-from manim_rust import Scene
+from manim_rust import Scene, Circle, Create, Write, MathTex, BLUE, RIGHT
 
-scene = Scene(1920, 1080)
-c = scene.add_circle(radius=1.5, fill="blue", stroke="white", stroke_width=4.0)
-s = scene.add_square(side=3.0, stroke="white")
-tex = scene.add_tex("e^{i pi} + 1 = 0", y=2.6)
+class Demo(Scene):
+    def construct(self):
+        c = Circle(radius=1.5, color=BLUE, fill_opacity=1)
+        tex = MathTex(r"e^{i\pi} + 1 = 0")
+        self.play(Create(c))
+        self.play(c.animate.shift(RIGHT))
+        self.play(Write(tex))
 
-scene.play_create(c, duration=1.0)
-scene.play_morph(c, s, duration=1.2)
-scene.play_fade_in(tex, duration=0.8)
-scene.wait(0.5)
-
-scene.render("media/demo.mp4", fps=60)
+Demo().render("media/ce_style.mp4")
 ```
+
+The older NodeId API still works (`scene.add_circle(...)`, `scene.play_create(c)`).
 
 Layout, arrows, and axes follow ManimCE names (`next_to`, `arrange`,
 `Write`, `Indicate`, `Circumscribe`, `Flash`, `MoveAlongPath`,
@@ -72,7 +76,8 @@ sampled once at authoring time — the per-frame path never calls back
 into Python. Plain text uses in-process Typst (`add_text` / `add_title`
 / `add_code` / `add_matrix`); the camera is timeline data
 (`play_camera_shift` / `play_camera_zoom`), not a scene-graph node.
-Color names accept the Manim A–E palette (`blue_c`, `yellow_c`, …).
+Color names accept the Manim A–E palette (`BLUE`, `YELLOW` / `yellow_c`, …).
+`ArrowVectorField` and `Table` are sampled / typeset once at authoring time.
 
 ```python
 axes = scene.add_axes(x_min=-3, x_max=3, y_min=-1, y_max=3)

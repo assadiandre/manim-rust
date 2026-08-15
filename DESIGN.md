@@ -97,4 +97,7 @@ crates/
   rectangles, ComplexPlane, number-line/axes labels, Matrix, Code,
   FadeTransform (fade+travel, no stretch — Shift and Scale share one
   transform property)
+- M13 CE object API: deferred `Circle()` / `Create(c)` / `c.animate.shift`,
+  `Scene.construct()`, ArrowVectorField (baked) and Table (Typst text grid).
+  Python still only *builds* timeline data; the per-frame path stays in Rust.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

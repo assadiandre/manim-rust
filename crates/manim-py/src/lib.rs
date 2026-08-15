@@ -7,32 +7,34 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use manim_anim::{Animation, Easing, Scene};
+use manim_anim::{path_targets, Animation, Easing, Scene};
 use manim_core::constants::{
-    DL, DOWN, DR, LEFT, ORIGIN, RIGHT, UL, UP, UR, DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DOT_RADIUS,
-    DEFAULT_MOBJECT_TO_EDGE_BUFFER, DEFAULT_MOBJECT_TO_MOBJECT_BUFFER,
+    DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DOT_RADIUS, DEFAULT_MOBJECT_TO_EDGE_BUFFER,
+    DEFAULT_MOBJECT_TO_MOBJECT_BUFFER, DL, DOWN, DR, LEFT, ORIGIN, RIGHT, UL, UP, UR,
 };
 use manim_core::kurbo::{Point, Vec2};
 use manim_core::peniko::Color;
 use manim_core::{
     add_angle as rust_add_angle, add_area_under as rust_add_area_under,
-    add_arrow as rust_add_arrow, add_axes as rust_add_axes,
-    add_background_rect as rust_add_background_rect, add_brace as rust_add_brace,
-    add_complex_plane as rust_add_complex_plane, add_cross as rust_add_cross,
-    add_curved_arrow as rust_add_curved_arrow, add_dashed_copy as rust_add_dashed_copy,
-    add_double_arrow as rust_add_double_arrow, add_number_line as rust_add_number_line,
-    add_number_plane as rust_add_number_plane, add_polar_plane as rust_add_polar_plane,
-    add_riemann_rects as rust_add_riemann_rects, add_right_angle as rust_add_right_angle,
-    add_surrounding_rect as rust_add_surrounding_rect, add_underline as rust_add_underline,
-    add_vector as rust_add_vector, geometry, palette, AxesOpts, Mobject, NodeId, NumberLineOpts,
-    NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
+    add_arrow as rust_add_arrow, add_arrow_field as rust_add_arrow_field,
+    add_axes as rust_add_axes, add_background_rect as rust_add_background_rect,
+    add_brace as rust_add_brace, add_complex_plane as rust_add_complex_plane,
+    add_cross as rust_add_cross, add_curved_arrow as rust_add_curved_arrow,
+    add_dashed_copy as rust_add_dashed_copy, add_double_arrow as rust_add_double_arrow,
+    add_number_line as rust_add_number_line, add_number_plane as rust_add_number_plane,
+    add_polar_plane as rust_add_polar_plane, add_riemann_rects as rust_add_riemann_rects,
+    add_right_angle as rust_add_right_angle, add_surrounding_rect as rust_add_surrounding_rect,
+    add_underline as rust_add_underline, add_vector as rust_add_vector, geometry, palette,
+    AxesOpts, Mobject, NodeId, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample,
+    Style,
 };
 use manim_render::{render_video, Renderer};
 use manim_typst::{
     add_axes_labels as rust_add_axes_labels, add_brace_label as rust_add_brace_label,
     add_code as rust_add_code, add_decimal as rust_add_decimal, add_math,
     add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
-    add_tex as add_latex, add_text as rust_add_text, add_title as rust_add_title, MathOptions,
+    add_table as rust_add_table, add_tex as add_latex, add_text as rust_add_text,
+    add_title as rust_add_title, MathOptions,
 };
 
 fn parse_color(s: &str) -> PyResult<Color> {
@@ -127,9 +129,9 @@ impl PyScene {
         stroke_width: f64,
     ) -> PyResult<usize> {
         let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
-        Ok(self.scene.add(
-            Mobject::new(geometry::circle(Point::new(x, y), radius)).with_style(style),
-        ))
+        Ok(self
+            .scene
+            .add(Mobject::new(geometry::circle(Point::new(x, y), radius)).with_style(style)))
     }
 
     #[pyo3(signature = (x = 0.0, y = 0.0, side = 2.0, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
@@ -143,9 +145,9 @@ impl PyScene {
         stroke_width: f64,
     ) -> PyResult<usize> {
         let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
-        Ok(self.scene.add(
-            Mobject::new(geometry::square(Point::new(x, y), side)).with_style(style),
-        ))
+        Ok(self
+            .scene
+            .add(Mobject::new(geometry::square(Point::new(x, y), side)).with_style(style)))
     }
 
     #[pyo3(signature = (x1, y1, x2, y2, stroke = Some("white".to_string()), stroke_width = 4.0))]
@@ -160,8 +162,7 @@ impl PyScene {
     ) -> PyResult<usize> {
         let style = build_style(None, stroke.as_deref(), stroke_width)?;
         Ok(self.scene.add(
-            Mobject::new(geometry::line(Point::new(x1, y1), Point::new(x2, y2)))
-                .with_style(style),
+            Mobject::new(geometry::line(Point::new(x1, y1), Point::new(x2, y2))).with_style(style),
         ))
     }
 
@@ -192,8 +193,7 @@ impl PyScene {
             }
         };
         let id = result.map_err(|e| PyValueError::new_err(e.to_string()))?;
-        self.scene.graph.get_mut(id).transform =
-            manim_core::kurbo::Affine::translate((x, y));
+        self.scene.graph.get_mut(id).transform = manim_core::kurbo::Affine::translate((x, y));
         Ok(id)
     }
 
@@ -209,9 +209,9 @@ impl PyScene {
         stroke_width: f64,
     ) -> PyResult<usize> {
         let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
-        Ok(self.scene.add(
-            Mobject::new(geometry::rect(Point::new(x, y), width, height)).with_style(style),
-        ))
+        Ok(self
+            .scene
+            .add(Mobject::new(geometry::rect(Point::new(x, y), width, height)).with_style(style)))
     }
 
     #[pyo3(signature = (x = 0.0, y = 0.0, rx = 1.5, ry = 0.8, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
@@ -226,9 +226,9 @@ impl PyScene {
         stroke_width: f64,
     ) -> PyResult<usize> {
         let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
-        Ok(self.scene.add(
-            Mobject::new(geometry::ellipse(Point::new(x, y), rx, ry)).with_style(style),
-        ))
+        Ok(self
+            .scene
+            .add(Mobject::new(geometry::ellipse(Point::new(x, y), rx, ry)).with_style(style)))
     }
 
     #[pyo3(signature = (x = 0.0, y = 0.0, radius = 1.0, start_angle = 0.0, sweep = 3.141592653589793, stroke = Some("white".to_string()), stroke_width = 4.0))]
@@ -259,7 +259,11 @@ impl PyScene {
         stroke: Option<String>,
         stroke_width: f64,
     ) -> PyResult<usize> {
-        let r = if radius <= 0.0 { DEFAULT_DOT_RADIUS } else { radius };
+        let r = if radius <= 0.0 {
+            DEFAULT_DOT_RADIUS
+        } else {
+            radius
+        };
         let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
         Ok(self
             .scene
@@ -439,13 +443,7 @@ impl PyScene {
     }
 
     #[pyo3(signature = (group, direction = "right", buff = 0.25, center = true))]
-    fn arrange(
-        &mut self,
-        group: NodeId,
-        direction: &str,
-        buff: f64,
-        center: bool,
-    ) -> PyResult<()> {
+    fn arrange(&mut self, group: NodeId, direction: &str, buff: f64, center: bool) -> PyResult<()> {
         self.scene
             .graph
             .arrange(group, parse_direction(direction)?, buff, center);
@@ -522,7 +520,8 @@ impl PyScene {
 
     #[pyo3(signature = (target, duration = 1.0))]
     fn play_indicate(&mut self, target: NodeId, duration: f64) {
-        self.scene.play([Animation::indicate(&self.scene.graph, target, duration)]);
+        self.scene
+            .play([Animation::indicate(&self.scene.graph, target, duration)]);
     }
 
     #[pyo3(signature = (target, duration = 1.0, easing = "smooth"))]
@@ -585,8 +584,7 @@ impl PyScene {
         };
         let id = rust_add_text(&mut self.scene.graph, source, &options)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        self.scene.graph.get_mut(id).transform =
-            manim_core::kurbo::Affine::translate((x, y));
+        self.scene.graph.get_mut(id).transform = manim_core::kurbo::Affine::translate((x, y));
         Ok(id)
     }
 
@@ -683,7 +681,12 @@ impl PyScene {
     }
 
     #[pyo3(signature = (target, stroke = Some("red".to_string()), stroke_width = 6.0))]
-    fn add_cross(&mut self, target: NodeId, stroke: Option<String>, stroke_width: f64) -> PyResult<usize> {
+    fn add_cross(
+        &mut self,
+        target: NodeId,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
         let style = build_style(None, stroke.as_deref(), stroke_width)?;
         Ok(rust_add_cross(&mut self.scene.graph, target, style))
     }
@@ -771,6 +774,30 @@ impl PyScene {
     fn set_color(&mut self, target: NodeId, color: &str) -> PyResult<()> {
         self.scene.graph.set_color(target, parse_color(color)?);
         Ok(())
+    }
+
+    fn scale(&mut self, target: NodeId, factor: f64) {
+        self.scene.graph.scale_about_center(target, factor);
+    }
+
+    fn center_of(&self, target: NodeId) -> (f64, f64) {
+        let p = self.scene.graph.center_of(target);
+        (p.x, p.y)
+    }
+
+    #[pyo3(signature = (target, other, direction = "right", buff = 0.25))]
+    fn next_to_delta(
+        &self,
+        target: NodeId,
+        other: NodeId,
+        direction: &str,
+        buff: f64,
+    ) -> PyResult<(f64, f64)> {
+        let d = self
+            .scene
+            .graph
+            .next_to_delta(target, other, parse_direction(direction)?, buff);
+        Ok((d.x, d.y))
     }
 
     #[pyo3(signature = (points, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
@@ -958,8 +985,7 @@ impl PyScene {
         };
         let id = rust_add_decimal(&mut self.scene.graph, value, places, &options)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        self.scene.graph.get_mut(id).transform =
-            manim_core::kurbo::Affine::translate((x, y));
+        self.scene.graph.get_mut(id).transform = manim_core::kurbo::Affine::translate((x, y));
         Ok(id)
     }
 
@@ -1269,6 +1295,88 @@ impl PyScene {
         .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
+    #[pyo3(signature = (
+        vx,
+        vy,
+        x_min = -3.0,
+        x_max = 3.0,
+        y_min = -2.0,
+        y_max = 2.0,
+        x_step = 1.0,
+        y_step = 1.0,
+        max_len = 0.45,
+        stroke = Some("yellow".to_string()),
+        stroke_width = 3.0
+    ))]
+    fn add_arrow_field(
+        &mut self,
+        vx: Bound<'_, PyAny>,
+        vy: Bound<'_, PyAny>,
+        x_min: f64,
+        x_max: f64,
+        y_min: f64,
+        y_max: f64,
+        x_step: f64,
+        y_step: f64,
+        max_len: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        let mut xs: Vec<(f64, f64, f64, f64)> = Vec::new();
+        if x_step > 0.0 && y_step > 0.0 {
+            let nx = ((x_max - x_min) / x_step).round() as i32;
+            let ny = ((y_max - y_min) / y_step).round() as i32;
+            for j in 0..=ny {
+                let y = y_min + j as f64 * y_step;
+                for i in 0..=nx {
+                    let x = x_min + i as f64 * x_step;
+                    let dx: f64 = vx.call1((x, y))?.extract()?;
+                    let dy: f64 = vy.call1((x, y))?.extract()?;
+                    xs.push((x, y, dx, dy));
+                }
+            }
+        }
+        Ok(rust_add_arrow_field(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+            x_step,
+            y_step,
+            |x, y| {
+                xs.iter()
+                    .find(|(px, py, _, _)| (*px - x).abs() < 1e-12 && (*py - y).abs() < 1e-12)
+                    .map(|(_, _, dx, _)| *dx)
+                    .unwrap_or(0.0)
+            },
+            |x, y| {
+                xs.iter()
+                    .find(|(px, py, _, _)| (*px - x).abs() < 1e-12 && (*py - y).abs() < 1e-12)
+                    .map(|(_, _, _, dy)| *dy)
+                    .unwrap_or(0.0)
+            },
+            max_len,
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (cells, font_size_pt = 36.0, color = None))]
+    fn add_table(
+        &mut self,
+        cells: Vec<Vec<String>>,
+        font_size_pt: f64,
+        color: Option<String>,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        rust_add_table(&mut self.scene.graph, &cells, &options)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
     #[pyo3(signature = (source, target, duration = 1.0))]
     fn play_fade_transform(&mut self, source: NodeId, target: NodeId, duration: f64) {
         self.scene.play_fade_transform(source, target, duration);
@@ -1316,6 +1424,230 @@ impl PyScene {
         self.scene.play_camera_zoom(factor, duration);
     }
 
+    /// Play several compiled animation specs in one `play` window.
+    ///
+    /// Each spec is `(kind, target, duration, easing, a, b, extra)`.
+    /// `a`/`b`/`extra` are kind-specific (shift delta, scale factor, color…).
+    /// An animation's relative start is 0 unless the kind staggers internally
+    /// (write, circumscribe). Python builds this list; Rust evaluates it.
+    fn play_bundle(
+        &mut self,
+        specs: Vec<(String, usize, f64, String, f64, f64, String)>,
+    ) -> PyResult<()> {
+        let mut anims = Vec::new();
+        let mut consume = Vec::new();
+        for (kind, target, duration, easing, a, b, extra) in specs {
+            let e = parse_easing(&easing)?;
+            match kind.as_str() {
+                "create" => {
+                    for id in path_targets(&self.scene.graph, target) {
+                        anims.push(
+                            Animation::create(&self.scene.graph, id, duration).with_easing(e),
+                        );
+                    }
+                }
+                "uncreate" => {
+                    for id in path_targets(&self.scene.graph, target) {
+                        anims.push(
+                            Animation::uncreate(&self.scene.graph, id, duration).with_easing(e),
+                        );
+                    }
+                }
+                "fade_in" => {
+                    anims.push(
+                        Animation::fade_in(&self.scene.graph, target, duration).with_easing(e),
+                    );
+                }
+                "fade_out" => {
+                    anims.push(
+                        Animation::fade_out(&self.scene.graph, target, duration).with_easing(e),
+                    );
+                }
+                "shift" => {
+                    anims.push(
+                        Animation::shift(&self.scene.graph, target, Vec2::new(a, b), duration)
+                            .with_easing(e),
+                    );
+                }
+                "scale" => {
+                    anims.push(
+                        Animation::scale(&self.scene.graph, target, a, duration).with_easing(e),
+                    );
+                }
+                "rotate" => {
+                    anims.push(
+                        Animation::rotate(&self.scene.graph, target, a, duration).with_easing(e),
+                    );
+                }
+                "grow" | "grow_from_center" => {
+                    anims.push(
+                        Animation::grow_from_center(&self.scene.graph, target, duration)
+                            .with_easing(e),
+                    );
+                }
+                "grow_from_point" => {
+                    anims.push(
+                        Animation::grow_from_point(
+                            &self.scene.graph,
+                            target,
+                            Point::new(a, b),
+                            duration,
+                        )
+                        .with_easing(e),
+                    );
+                }
+                "grow_from_edge" => {
+                    anims.push(
+                        Animation::grow_from_edge(
+                            &self.scene.graph,
+                            target,
+                            Vec2::new(a, b),
+                            duration,
+                        )
+                        .with_easing(e),
+                    );
+                }
+                "indicate" => {
+                    anims.push(Animation::indicate(&self.scene.graph, target, duration));
+                }
+                "wiggle" => {
+                    anims.push(Animation::wiggle(&self.scene.graph, target, duration));
+                }
+                "shrink" | "shrink_to_center" => {
+                    anims.push(
+                        Animation::shrink_to_center(&self.scene.graph, target, duration)
+                            .with_easing(e),
+                    );
+                }
+                "spin_in" => {
+                    anims.push(Animation::spin_in(&self.scene.graph, target, duration));
+                }
+                "recolor" => {
+                    let color = parse_color(&extra)?;
+                    anims.push(
+                        Animation::recolor(&self.scene.graph, target, color, duration)
+                            .with_easing(e),
+                    );
+                }
+                "draw_border_then_fill" => {
+                    for id in path_targets(&self.scene.graph, target) {
+                        anims.push(Animation::draw_border_then_fill(
+                            &self.scene.graph,
+                            id,
+                            duration,
+                        ));
+                    }
+                }
+                "show_passing_flash" => {
+                    for id in path_targets(&self.scene.graph, target) {
+                        anims.push(Animation::show_passing_flash(
+                            &self.scene.graph,
+                            id,
+                            duration,
+                        ));
+                    }
+                }
+                "move_along_path" => {
+                    let path = a as usize;
+                    anims.push(
+                        Animation::move_along_path(&self.scene.graph, target, path, duration)
+                            .with_easing(e),
+                    );
+                }
+                "morph" => {
+                    let other = a as usize;
+                    let to = self.scene.graph.get(other).path.clone();
+                    anims.push(
+                        Animation::morph(&self.scene.graph, target, to, duration).with_easing(e),
+                    );
+                    consume.push(other);
+                }
+                "write" => {
+                    let targets = path_targets(&self.scene.graph, target);
+                    let n = targets.len();
+                    let lag = 0.1;
+                    let each = duration / (1.0 + (n.saturating_sub(1) as f64) * lag);
+                    for (i, id) in targets.into_iter().enumerate() {
+                        let mut an = Animation::create(&self.scene.graph, id, each).with_easing(e);
+                        an.start = i as f64 * each * lag;
+                        anims.push(an);
+                    }
+                }
+                "circumscribe" => {
+                    let color = parse_color(if extra.is_empty() {
+                        "yellow"
+                    } else {
+                        extra.as_str()
+                    })?;
+                    let style = Style::default().no_fill().with_stroke(color, 4.0);
+                    let rect =
+                        rust_add_surrounding_rect(&mut self.scene.graph, target, 0.15, 0.0, style);
+                    let half = (duration * 0.5).max(1e-3);
+                    for id in path_targets(&self.scene.graph, rect) {
+                        anims.push(Animation::create(&self.scene.graph, id, half).with_easing(e));
+                        let mut u = Animation::uncreate(&self.scene.graph, id, half).with_easing(e);
+                        u.start = half;
+                        anims.push(u);
+                    }
+                }
+                "fade_transform" => {
+                    let dest = a as usize;
+                    let src_c = self.scene.graph.center_of(target);
+                    let dst_c = self.scene.graph.center_of(dest);
+                    let delta = dst_c - src_c;
+                    let fade_out =
+                        Animation::fade_out(&self.scene.graph, target, duration).with_easing(e);
+                    let shift_src =
+                        Animation::shift(&self.scene.graph, target, delta, duration).with_easing(e);
+                    self.scene.graph.move_to(dest, src_c);
+                    let fade_in =
+                        Animation::fade_in(&self.scene.graph, dest, duration).with_easing(e);
+                    let shift_dst =
+                        Animation::shift(&self.scene.graph, dest, delta, duration).with_easing(e);
+                    anims.extend([fade_out, shift_src, fade_in, shift_dst]);
+                }
+                "flash" => {
+                    let color = parse_color(if extra.is_empty() {
+                        "yellow"
+                    } else {
+                        extra.as_str()
+                    })?;
+                    let n = 12;
+                    let radius = 0.4;
+                    let len = 0.22;
+                    let at = Point::new(a, b);
+                    let group = self.scene.graph.add(Mobject::group().named("flash"));
+                    let style = Style::default().no_fill().with_stroke(color, 4.0);
+                    for i in 0..n {
+                        let ang = i as f64 / n as f64 * std::f64::consts::TAU;
+                        let dir = Vec2::new(ang.cos(), ang.sin());
+                        let start = at + dir * (radius - len);
+                        let end = at + dir * radius;
+                        let id = self.scene.graph.add_child(
+                            group,
+                            Mobject::new(geometry::line(start, end)).with_style(style.clone()),
+                        );
+                        anims.push(Animation::show_passing_flash(
+                            &self.scene.graph,
+                            id,
+                            duration,
+                        ));
+                    }
+                }
+                other => {
+                    return Err(PyValueError::new_err(format!(
+                        "unknown animation kind {other:?}"
+                    )));
+                }
+            }
+        }
+        self.scene.play(anims);
+        for id in consume {
+            self.scene.graph.remove(id);
+        }
+        Ok(())
+    }
+
     fn wait(&mut self, duration: f64) {
         self.scene.wait(duration);
     }
@@ -1354,7 +1686,7 @@ impl PyScene {
 }
 
 #[pymodule]
-fn manim_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyScene>()?;
     m.add("ORIGIN", (ORIGIN.x, ORIGIN.y))?;
     m.add("UP", (UP.x, UP.y))?;
@@ -1365,7 +1697,13 @@ fn manim_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("UR", (UR.x, UR.y))?;
     m.add("DL", (DL.x, DL.y))?;
     m.add("DR", (DR.x, DR.y))?;
-    m.add("DEFAULT_MOBJECT_TO_MOBJECT_BUFFER", DEFAULT_MOBJECT_TO_MOBJECT_BUFFER)?;
-    m.add("DEFAULT_MOBJECT_TO_EDGE_BUFFER", DEFAULT_MOBJECT_TO_EDGE_BUFFER)?;
+    m.add(
+        "DEFAULT_MOBJECT_TO_MOBJECT_BUFFER",
+        DEFAULT_MOBJECT_TO_MOBJECT_BUFFER,
+    )?;
+    m.add(
+        "DEFAULT_MOBJECT_TO_EDGE_BUFFER",
+        DEFAULT_MOBJECT_TO_EDGE_BUFFER,
+    )?;
     Ok(())
 }

@@ -20,8 +20,14 @@ fn assert_golden(actual: &[u8], width: u32, height: u32, name: &str) {
     let path = golden_dir().join(name);
     if std::env::var("UPDATE_GOLDEN").is_ok() || !path.exists() {
         std::fs::create_dir_all(golden_dir()).unwrap();
-        image::save_buffer(&path, actual, width, height, image::ExtendedColorType::Rgba8)
-            .unwrap();
+        image::save_buffer(
+            &path,
+            actual,
+            width,
+            height,
+            image::ExtendedColorType::Rgba8,
+        )
+        .unwrap();
         eprintln!("golden written: {}", path.display());
         return;
     }
@@ -53,9 +59,8 @@ fn black() -> Color {
 fn golden_circle() {
     let mut scene = SceneGraph::new();
     scene.add(
-        Mobject::new(geometry::circle(Point::ORIGIN, 1.5)).with_style(
-            Style::filled(palette::blue()).with_stroke(palette::white(), 6.0),
-        ),
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.5))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 6.0)),
     );
     let mut r = Renderer::new(256, 256, black()).unwrap();
     let px = r.render_frame(&mut scene).unwrap().to_vec();
@@ -74,8 +79,11 @@ fn golden_shape_gallery() {
             .with_style(Style::filled(palette::green())),
     );
     scene.add(
-        Mobject::new(geometry::line(Point::new(-3.0, -1.5), Point::new(3.0, -0.5)))
-            .with_style(Style::default().with_stroke(palette::yellow(), 8.0)),
+        Mobject::new(geometry::line(
+            Point::new(-3.0, -1.5),
+            Point::new(3.0, -0.5),
+        ))
+        .with_style(Style::default().with_stroke(palette::yellow(), 8.0)),
     );
     let mut r = Renderer::new(256, 256, black()).unwrap();
     let px = r.render_frame(&mut scene).unwrap().to_vec();
@@ -99,6 +107,21 @@ fn golden_authoring_gallery() {
 fn golden_layout_and_axes() {
     let mut r = Renderer::new(480, 270, black()).unwrap();
     for name in ["layout", "axes"] {
+        let scene = manim_scenes::probes()
+            .into_iter()
+            .find(|p| p.name == name)
+            .unwrap_or_else(|| panic!("{name} probe"));
+        let mut sim = scene.scene.graph.clone();
+        scene.scene.timeline.apply(&mut sim, 0.0);
+        let px = r.render_frame(&mut sim).unwrap().to_vec();
+        assert_golden(&px, 480, 270, &format!("{name}.png"));
+    }
+}
+
+#[test]
+fn golden_m13_static() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    for name in ["field", "table"] {
         let scene = manim_scenes::probes()
             .into_iter()
             .find(|p| p.name == name)

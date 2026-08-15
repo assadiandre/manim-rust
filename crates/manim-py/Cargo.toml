@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "manim_rust"
+name = "_native"
 crate-type = ["cdylib"]
+
+[package.metadata.maturin]
+name = "manim_rust._native"
+python-source = "python"
 
 [dependencies]
 manim-anim = { version = "0.1.0", path = "../manim-anim" }

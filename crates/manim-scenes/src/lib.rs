@@ -6,14 +6,14 @@ use kurbo::{Affine, Point, Vec2};
 use manim_anim::{Animation, Scene};
 use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
-    add_angle, add_area_under, add_arrow, add_axes, add_brace, add_complex_plane, add_curved_arrow,
-    add_dashed_copy, add_number_line, add_number_plane, add_polar_plane, add_riemann_rects,
-    add_right_angle, add_surrounding_rect, add_underline, geometry, palette, AxesOpts, Mobject,
-    NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
+    add_angle, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace, add_complex_plane,
+    add_curved_arrow, add_dashed_copy, add_number_line, add_number_plane, add_polar_plane,
+    add_riemann_rects, add_right_angle, add_surrounding_rect, add_underline, geometry, palette,
+    AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_typst::{
-    add_code, add_decimal, add_math, add_matrix, add_number_line_labels, add_text, add_title,
-    MathOptions,
+    add_code, add_decimal, add_math, add_matrix, add_number_line_labels, add_table, add_text,
+    add_title, MathOptions,
 };
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
@@ -22,17 +22,16 @@ pub fn demo(formula: &str) -> Scene {
     let mut scene = Scene::new();
 
     let circle = scene.add(
-        Mobject::new(geometry::circle(Point::ORIGIN, 1.5)).with_style(
-            Style::filled(palette::blue()).with_stroke(palette::white(), 4.0),
-        ),
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.5))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
     );
     scene.play([Animation::create(&scene.graph, circle, 1.0)]);
 
     let square = geometry::square(Point::ORIGIN, 3.0);
     scene.play([Animation::morph(&scene.graph, circle, square, 1.2)]);
 
-    let tex = add_math(&mut scene.graph, formula, &MathOptions::default())
-        .expect("typst compile failed");
+    let tex =
+        add_math(&mut scene.graph, formula, &MathOptions::default()).expect("typst compile failed");
     scene.graph.get_mut(tex).transform = Affine::translate((0.0, 2.6));
     scene.play([Animation::fade_in(&scene.graph, tex, 0.8)]);
 
@@ -70,9 +69,8 @@ pub fn probes() -> Vec<Probe> {
     // create: filled circle traces itself.
     let mut s = Scene::new();
     let c = s.add(
-        Mobject::new(geometry::circle(Point::ORIGIN, 1.5)).with_style(
-            Style::filled(palette::blue()).with_stroke(palette::white(), 4.0),
-        ),
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.5))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
     );
     s.play([Animation::create(&s.graph, c, 1.0)]);
     out.push(probe("create", s, &[0.0, 0.25, 0.5, 0.75, 1.0]));
@@ -80,9 +78,8 @@ pub fn probes() -> Vec<Probe> {
     // fade_in / fade_out.
     let mut s = Scene::new();
     let sq = s.add(
-        Mobject::new(geometry::square(Point::ORIGIN, 2.5)).with_style(
-            Style::filled(palette::green()).with_stroke(palette::white(), 4.0),
-        ),
+        Mobject::new(geometry::square(Point::ORIGIN, 2.5))
+            .with_style(Style::filled(palette::green()).with_stroke(palette::white(), 4.0)),
     );
     s.play([Animation::fade_in(&s.graph, sq, 0.8)]);
     s.play([Animation::fade_out(&s.graph, sq, 0.8)]);
@@ -90,25 +87,28 @@ pub fn probes() -> Vec<Probe> {
 
     // shift.
     let mut s = Scene::new();
-    let c = s.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)).with_style(
-        Style::filled(palette::red()).with_stroke(palette::white(), 4.0),
-    ));
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.0))
+            .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 4.0)),
+    );
     s.play([Animation::shift(&s.graph, c, Vec2::new(3.0, 1.0), 1.0)]);
     out.push(probe("shift", s, &[0.0, 0.5, 1.0]));
 
     // scale (about center).
     let mut s = Scene::new();
-    let c = s.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)).with_style(
-        Style::filled(palette::yellow()).with_stroke(palette::white(), 4.0),
-    ));
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.0))
+            .with_style(Style::filled(palette::yellow()).with_stroke(palette::white(), 4.0)),
+    );
     s.play([Animation::scale(&s.graph, c, 2.0, 1.0)]);
     out.push(probe("scale", s, &[0.0, 0.5, 1.0]));
 
     // morph: circle -> triangle.
     let mut s = Scene::new();
-    let c = s.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.5)).with_style(
-        Style::filled(palette::blue()).with_stroke(palette::white(), 4.0),
-    ));
+    let c = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.5))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
     let mut tri = kurbo::BezPath::new();
     tri.move_to(Point::new(0.0, 1.5));
     tri.line_to(Point::new(-1.5, -1.0));
@@ -169,8 +169,13 @@ pub fn probes() -> Vec<Probe> {
             .with_style(Style::filled(palette::purple()).no_stroke()),
     );
     s.add(
-        Mobject::new(geometry::rounded_rect(Point::new(-4.0, -1.5), 2.0, 1.2, 0.3))
-            .with_style(Style::filled(palette::maroon()).with_stroke(palette::white(), 4.0)),
+        Mobject::new(geometry::rounded_rect(
+            Point::new(-4.0, -1.5),
+            2.0,
+            1.2,
+            0.3,
+        ))
+        .with_style(Style::filled(palette::maroon()).with_stroke(palette::white(), 4.0)),
     );
     s.add(
         Mobject::new(geometry::dashed_line(
@@ -179,7 +184,11 @@ pub fn probes() -> Vec<Probe> {
             0.18,
             0.1,
         ))
-        .with_style(Style::default().with_stroke(palette::yellow(), 5.0).no_fill()),
+        .with_style(
+            Style::default()
+                .with_stroke(palette::yellow(), 5.0)
+                .no_fill(),
+        ),
     );
     add_arrow(
         &mut s.graph,
@@ -197,7 +206,12 @@ pub fn probes() -> Vec<Probe> {
         Mobject::new(geometry::triangle(Point::ORIGIN, 1.6))
             .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
     );
-    s.play([Animation::rotate(&s.graph, tri, std::f64::consts::FRAC_PI_2, 1.0)]);
+    s.play([Animation::rotate(
+        &s.graph,
+        tri,
+        std::f64::consts::FRAC_PI_2,
+        1.0,
+    )]);
     out.push(probe("rotate", s, &[0.0, 0.5, 1.0]));
 
     // uncreate a circle.
@@ -249,15 +263,17 @@ pub fn probes() -> Vec<Probe> {
         Style::default().with_stroke(palette::gray(), 3.0),
     );
     s.add(
-        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x))
-            .with_style(Style::default().with_stroke(palette::yellow(), 5.0).no_fill()),
+        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x)).with_style(
+            Style::default()
+                .with_stroke(palette::yellow(), 5.0)
+                .no_fill(),
+        ),
     );
     out.push(probe("axes", s, &[0.0]));
 
     // plain text (Typst markup, not math).
     let mut s = Scene::new();
-    add_text(&mut s.graph, "Hello, Manim", &MathOptions::default())
-        .expect("text compile failed");
+    add_text(&mut s.graph, "Hello, Manim", &MathOptions::default()).expect("text compile failed");
     out.push(probe("text", s, &[0.0]));
 
     // annotations: surrounding rect, underline, brace.
@@ -271,7 +287,9 @@ pub fn probes() -> Vec<Probe> {
         sq,
         0.2,
         0.15,
-        Style::default().no_fill().with_stroke(palette::yellow(), 4.0),
+        Style::default()
+            .no_fill()
+            .with_stroke(palette::yellow(), 4.0),
     );
     add_underline(
         &mut s.graph,
@@ -395,12 +413,18 @@ pub fn probes() -> Vec<Probe> {
     let a = Point::new(2.4, 0.4);
     let b = Point::new(0.6, 2.2);
     s.add(
-        Mobject::new(geometry::line(v, a))
-            .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+        Mobject::new(geometry::line(v, a)).with_style(
+            Style::default()
+                .with_stroke(palette::white(), 4.0)
+                .no_fill(),
+        ),
     );
     s.add(
-        Mobject::new(geometry::line(v, b))
-            .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+        Mobject::new(geometry::line(v, b)).with_style(
+            Style::default()
+                .with_stroke(palette::white(), 4.0)
+                .no_fill(),
+        ),
     );
     add_angle(
         &mut s.graph,
@@ -408,7 +432,9 @@ pub fn probes() -> Vec<Probe> {
         a,
         b,
         0.7,
-        Style::default().with_stroke(palette::yellow(), 5.0).no_fill(),
+        Style::default()
+            .with_stroke(palette::yellow(), 5.0)
+            .no_fill(),
     );
     add_right_angle(
         &mut s.graph,
@@ -423,14 +449,22 @@ pub fn probes() -> Vec<Probe> {
             Point::new(-3.0, -1.2),
             Point::new(-1.2, -1.2),
         ))
-        .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+        .with_style(
+            Style::default()
+                .with_stroke(palette::white(), 4.0)
+                .no_fill(),
+        ),
     );
     s.add(
         Mobject::new(geometry::line(
             Point::new(-3.0, -1.2),
             Point::new(-3.0, 0.6),
         ))
-        .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+        .with_style(
+            Style::default()
+                .with_stroke(palette::white(), 4.0)
+                .no_fill(),
+        ),
     );
     out.push(probe("angle", s, &[0.0]));
 
@@ -455,8 +489,13 @@ pub fn probes() -> Vec<Probe> {
     // title + decimal
     let mut s = Scene::new();
     add_title(&mut s.graph, "Title", &MathOptions::default()).expect("title");
-    let dec = add_decimal(&mut s.graph, std::f64::consts::PI, 3, &MathOptions::default())
-        .expect("decimal");
+    let dec = add_decimal(
+        &mut s.graph,
+        std::f64::consts::PI,
+        3,
+        &MathOptions::default(),
+    )
+    .expect("decimal");
     s.graph.set_y(dec, -0.8);
     out.push(probe("title", s, &[0.0]));
 
@@ -520,7 +559,9 @@ pub fn probes() -> Vec<Probe> {
         1.0,
         1.0,
         |x| 0.35 * x * x,
-        Style::filled(palette::blue()).no_stroke().with_opacity(0.35),
+        Style::filled(palette::blue())
+            .no_stroke()
+            .with_opacity(0.35),
     );
     add_riemann_rects(
         &mut s.graph,
@@ -536,16 +577,22 @@ pub fn probes() -> Vec<Probe> {
         0.7,
     );
     s.add(
-        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x))
-            .with_style(Style::default().with_stroke(palette::yellow(), 5.0).no_fill()),
+        Mobject::new(geometry::plot(-2.2, 2.2, 80, 1.0, 1.0, |x| 0.35 * x * x)).with_style(
+            Style::default()
+                .with_stroke(palette::yellow(), 5.0)
+                .no_fill(),
+        ),
     );
     out.push(probe("riemann", s, &[0.0]));
 
     // dashed circle
     let mut s = Scene::new();
     let c = s.add(
-        Mobject::new(geometry::circle(Point::new(-2.2, 0.0), 1.2))
-            .with_style(Style::default().with_stroke(palette::white(), 4.0).no_fill()),
+        Mobject::new(geometry::circle(Point::new(-2.2, 0.0), 1.2)).with_style(
+            Style::default()
+                .with_stroke(palette::white(), 4.0)
+                .no_fill(),
+        ),
     );
     let d = add_dashed_copy(&mut s.graph, c, 16, 0.55);
     s.graph.shift(d, Vec2::new(4.4, 0.0));
@@ -642,6 +689,36 @@ pub fn probes() -> Vec<Probe> {
     );
     s.play_fade_transform(sq, c, 1.2);
     out.push(probe("fadexform", s, &[0.0, 0.4, 0.8, 1.2]));
+
+    // static arrow field (swirl)
+    let mut s = Scene::new();
+    add_arrow_field(
+        &mut s.graph,
+        -3.0,
+        3.0,
+        -2.0,
+        2.0,
+        1.0,
+        1.0,
+        |_x, y| -0.45 * y,
+        |x, _y| 0.45 * x,
+        0.45,
+        Style::default().with_stroke(palette::yellow(), 3.0),
+    );
+    out.push(probe("field", s, &[0.0]));
+
+    // 2x2 text table
+    let mut s = Scene::new();
+    add_table(
+        &mut s.graph,
+        &[vec!["a".into(), "b".into()], vec!["c".into(), "d".into()]],
+        &MathOptions {
+            font_size_pt: 48.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("table");
+    out.push(probe("table", s, &[0.0]));
 
     out
 }
