@@ -2611,7 +2611,12 @@ impl PyScene {
                     let other = a as usize;
                     let to = self.scene.graph.get(other).path.clone();
                     anims.push(
-                        Animation::morph(&self.scene.graph, target, to, duration).with_easing(e),
+                        Animation::morph_arc(&self.scene.graph, target, to, b, duration)
+                            .with_easing(e),
+                    );
+                    anims.push(
+                        Animation::recolor_to_other(&self.scene.graph, target, other, duration)
+                            .with_easing(e),
                     );
                     consume.push(other);
                 }

@@ -1,4 +1,4 @@
-"""Side-by-side manim_rust goldens vs ManimCE frames for M25–M29 probes.
+"""Side-by-side manim_rust goldens vs ManimCE frames for M25–M30 probes.
 
 Writes media/visual_check/sidebyside_m25/row_*.png and index.html.
 Metrics are a review aid (AA / adaptive sampling / stroke scaling differ).
@@ -50,6 +50,10 @@ CASES = [
     ("fadeto t=0", "fadeto_0.0.png", "FadeToRef", "video", 0.0),
     ("fadeto t=0.5", "fadeto_0.5.png", "FadeToRef", "video", 0.5),
     ("fadeto t=1", "fadeto_1.0.png", "FadeToRef", "video", 1.0),
+    ("svgtext", "svgtext.png", "SvgTextRef", "still", None),
+    ("clockwise t=0", "clockwise_0.0.png", "ClockwiseRef", "video", 0.0),
+    ("clockwise t=0.5", "clockwise_0.5.png", "ClockwiseRef", "video", 0.5),
+    ("clockwise t=1", "clockwise_1.0.png", "ClockwiseRef", "video", 1.0),
 ]
 
 
@@ -186,10 +190,10 @@ def main() -> None:
         print(f"{title:18}  differ>{8}: {frac:6.2%}   mean|Δ|: {mean:5.2f}")
 
     html = (
-        "<!doctype html><meta charset=utf-8><title>M25–M29 vs ManimCE</title>"
+        "<!doctype html><meta charset=utf-8><title>M25–M30 vs ManimCE</title>"
         "<style>body{background:#111;color:#eee;font:14px system-ui;margin:2em}"
         "h2{font-size:1em;margin:1.5em 0 .4em}</style>"
-        "<h1>manim_rust vs ManimCE (M25–M29 probes)</h1>" + "".join(rows_html)
+        "<h1>manim_rust vs ManimCE (M25–M30 probes)</h1>" + "".join(rows_html)
     )
     (OUT / "index.html").write_text(html)
     print(f"wrote {OUT / 'index.html'}")

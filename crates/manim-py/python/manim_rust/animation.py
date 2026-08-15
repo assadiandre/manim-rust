@@ -217,6 +217,18 @@ class ReplacementTransform(Transform):
     pass
 
 
+class ClockwiseTransform(Transform):
+    def _spec(self, raw, run_time=None, rate_func=None):
+        kind, target, duration, easing, other, _, extra = super()._spec(raw, run_time, rate_func)
+        return (kind, target, duration, easing, other, -3.141592653589793, extra)
+
+
+class CounterclockwiseTransform(Transform):
+    def _spec(self, raw, run_time=None, rate_func=None):
+        kind, target, duration, easing, other, _, extra = super()._spec(raw, run_time, rate_func)
+        return (kind, target, duration, easing, other, 3.141592653589793, extra)
+
+
 class TransformFromCopy(Animation):
     kind = "transform_from_copy"
 

@@ -134,6 +134,30 @@ fn golden_m22_static() {
 }
 
 #[test]
+fn golden_m30() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    let scene = manim_scenes::probes()
+        .into_iter()
+        .find(|p| p.name == "svgtext")
+        .expect("svgtext probe");
+    let mut sim = scene.scene.graph.clone();
+    scene.scene.timeline.apply(&mut sim, 0.0);
+    let px = r.render_frame(&mut sim).unwrap().to_vec();
+    assert_golden(&px, 480, 270, "svgtext.png");
+
+    let scene = manim_scenes::probes()
+        .into_iter()
+        .find(|p| p.name == "clockwise")
+        .expect("clockwise probe");
+    for &t in &[0.0, 0.5, 1.0] {
+        let mut sim = scene.scene.graph.clone();
+        scene.scene.timeline.apply(&mut sim, t);
+        let px = r.render_frame(&mut sim).unwrap().to_vec();
+        assert_golden(&px, 480, 270, &format!("clockwise_{t:.1}.png"));
+    }
+}
+
+#[test]
 fn golden_m29() {
     let mut r = Renderer::new(480, 270, black()).unwrap();
     for (name, times) in [

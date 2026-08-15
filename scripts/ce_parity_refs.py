@@ -1,4 +1,4 @@
-"""ManimCE references matching manim_rust M25–M29 probes (480x270).
+"""ManimCE references matching manim_rust M25–M30 probes (480x270).
 
 Rendered by scripts/compare_side_by_side.py. Geometry and colors are pinned
 to the Rust probes so the side-by-side is a real parity check, not a vibe check.
@@ -11,6 +11,7 @@ from manim import (
     ArcPolygon,
     Broadcast,
     Circle,
+    ClockwiseTransform,
     Difference,
     FadeToColor,
     FadeTransform,
@@ -170,6 +171,32 @@ class BroadcastRef(Scene):
     def construct(self):
         ring = Circle(radius=2.2, color=TEAL, stroke_width=5, fill_opacity=0)
         self.play(Broadcast(ring, run_time=1.5, lag_ratio=0.2, n_mobs=5))
+
+
+class SvgTextRef(Scene):
+    def construct(self):
+        from manim import SVGMobject
+
+        svg = SVGMobject(
+            "ce_assets/svgtext.svg",
+        ).set_height(2.4)
+        self.add(svg)
+
+
+class ClockwiseRef(Scene):
+    def construct(self):
+        a = Circle(
+            radius=0.45,
+            fill_color=ManimColor("#FFFF00"),
+            fill_opacity=1,
+            stroke_color=WHITE,
+            stroke_width=4,
+        )
+        a.move_to([-2.4, 0, 0])
+        b = Square(side_length=1.6, fill_color=BLUE, fill_opacity=1, stroke_color=WHITE, stroke_width=4)
+        b.move_to([2.4, 0, 0])
+        self.add(a)
+        self.play(ClockwiseTransform(a, b, run_time=1, rate_func=lambda t: t))
 
 
 class FadeToRef(Scene):

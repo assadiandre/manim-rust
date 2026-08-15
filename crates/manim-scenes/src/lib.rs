@@ -1432,5 +1432,31 @@ pub fn probes() -> Vec<Probe> {
     s.play([Animation::recolor(&s.graph, blob, palette::red(), 1.0)]);
     out.push(probe("fadeto", s, &[0.0, 0.5, 1.0]));
 
+    // SVG <text> flattened to glyph outlines
+    let mut s = Scene::new();
+    add_svg(
+        &mut s.graph,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40">
+            <text x="8" y="28" font-family="DejaVu Sans Mono" font-size="24" fill="#FFFF00">Hi</text>
+        </svg>"##,
+        2.4,
+    )
+    .expect("svgtext");
+    out.push(probe("svgtext", s, &[0.0]));
+
+    // ClockwiseTransform: left circle swings above to the right square
+    let mut s = Scene::new();
+    let src = s.add(
+        Mobject::new(geometry::circle(Point::new(-2.4, 0.0), 0.45))
+            .with_style(Style::filled(palette::yellow()).with_stroke(palette::white(), 4.0)),
+    );
+    let dst = s.add(
+        Mobject::new(geometry::square(Point::new(2.4, 0.0), 1.6))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    s.graph.get_mut(dst).visible = false;
+    s.play_clockwise_transform(src, dst, 1.0);
+    out.push(probe("clockwise", s, &[0.0, 0.5, 1.0]));
+
     out
 }
