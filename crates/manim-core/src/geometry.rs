@@ -365,6 +365,37 @@ pub fn plot(x_min: f64, x_max: f64, samples: usize, unit_x: f64, unit_y: f64, f:
     polyline(&pts)
 }
 
+/// Region under `f` on `[x_min, x_max]`, closed down to the x-axis.
+/// Negative `f` is included (signed area).
+pub fn area_under(
+    x_min: f64,
+    x_max: f64,
+    samples: usize,
+    unit_x: f64,
+    unit_y: f64,
+    f: impl Fn(f64) -> f64,
+) -> BezPath {
+    let mut p = plot(x_min, x_max, samples, unit_x, unit_y, f);
+    p.line_to(Point::new(x_max * unit_x, 0.0));
+    p.line_to(Point::new(x_min * unit_x, 0.0));
+    p.close_path();
+    p
+}
+
+/// ManimCE `DashedVMobject`: `num_dashes` equal arc-length windows, each
+/// keeping the first `dashed_ratio` fraction (clamped to `0.05..=0.95`).
+pub fn dashed_path(path: &BezPath, num_dashes: usize, dashed_ratio: f64) -> BezPath {
+    let n = num_dashes.max(1);
+    let ratio = dashed_ratio.clamp(0.05, 0.95);
+    let mut out = BezPath::new();
+    for i in 0..n {
+        let t0 = i as f64 / n as f64;
+        let t1 = t0 + ratio / n as f64;
+        out.extend(trim(path, t0, t1).iter());
+    }
+    out
+}
+
 /// Total arc length, computed per segment (accurate for curves).
 pub fn path_length(path: &BezPath) -> f64 {
     path.segments().map(|s| s.arclen(1e-9)).sum()

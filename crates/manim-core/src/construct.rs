@@ -9,7 +9,7 @@ use crate::constants::{DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DOT_RADIUS};
 use crate::geometry;
 use crate::mobject::Mobject;
 use crate::scene::{NodeId, SceneGraph};
-use crate::style::{palette, Style};
+use crate::style::{lerp_color, palette, Style};
 
 /// Filled dot (Manim `Dot`).
 pub fn add_dot(graph: &mut SceneGraph, center: Point, radius: f64, style: Style) -> NodeId {
@@ -113,14 +113,8 @@ fn add_number_line_into(
             Mobject::new(geometry::line(start, end)).with_style(style.clone().no_fill()),
         );
     }
-    if opts.include_ticks && opts.x_step > 0.0 {
-        let n = ((opts.x_max - opts.x_min) / opts.x_step).round() as i32;
-        for i in 0..=n {
-            let x = opts.x_min + i as f64 * opts.x_step;
-            // A tick on the positive end sits under the arrow tip.
-            if opts.include_tip && (x - opts.x_max).abs() < 1e-9 {
-                continue;
-            }
+    if opts.include_ticks {
+        for x in number_line_tick_values(opts) {
             let px = x * opts.unit_size;
             let tick = geometry::line(
                 Point::new(px, -opts.tick_size),
@@ -129,6 +123,29 @@ fn add_number_line_into(
             graph.add_child(group, Mobject::new(tick).with_style(style.clone().no_fill()));
         }
     }
+}
+
+/// Number-line value → point on the line (y = 0).
+pub fn number_line_n2p(opts: &NumberLineOpts, value: f64) -> Point {
+    Point::new(value * opts.unit_size, 0.0)
+}
+
+/// Tick locations used by `add_number_line` (skips the tip-end when `include_tip`).
+pub fn number_line_tick_values(opts: &NumberLineOpts) -> Vec<f64> {
+    if opts.x_step <= 0.0 {
+        return Vec::new();
+    }
+    let n = ((opts.x_max - opts.x_min) / opts.x_step).round() as i32;
+    let mut vals = Vec::new();
+    for i in 0..=n {
+        let x = opts.x_min + i as f64 * opts.x_step;
+        // A tick on the positive end sits under the arrow tip.
+        if opts.include_tip && (x - opts.x_max).abs() < 1e-9 {
+            continue;
+        }
+        vals.push(x);
+    }
+    vals
 }
 
 #[derive(Clone, Debug)]
@@ -184,6 +201,11 @@ pub fn add_axes(graph: &mut SceneGraph, opts: &AxesOpts, style: Style) -> NodeId
     let y = add_number_line(graph, &y_opts, style);
     graph.get_mut(y).transform = Affine::rotate(std::f64::consts::FRAC_PI_2);
     graph.group_nodes(&[x, y])
+}
+
+/// Axes coordinates → scene point.
+pub fn axes_c2p(opts: &AxesOpts, x: f64, y: f64) -> Point {
+    Point::new(x * opts.unit_size, y * opts.unit_size)
 }
 
 /// Arrow from the origin to `end` (Manim `Vector`).
@@ -418,6 +440,106 @@ pub fn add_number_plane(
         .with_style(axis_style.no_fill()),
     );
     group
+}
+
+/// Complex value (re, im) → scene point on a number plane.
+pub fn plane_n2p(opts: &NumberPlaneOpts, re: f64, im: f64) -> Point {
+    Point::new(re * opts.unit_size, im * opts.unit_size)
+}
+
+/// Number plane labeled as a complex plane (Manim `ComplexPlane`).
+pub fn add_complex_plane(
+    graph: &mut SceneGraph,
+    opts: &NumberPlaneOpts,
+    grid_style: Style,
+    axis_style: Style,
+) -> NodeId {
+    let id = add_number_plane(graph, opts, grid_style, axis_style);
+    graph.get_mut(id).name = Some("complex_plane".into());
+    id
+}
+
+/// Filled region under `f` on `[x_min, x_max]`.
+pub fn add_area_under(
+    graph: &mut SceneGraph,
+    x_min: f64,
+    x_max: f64,
+    samples: usize,
+    unit_x: f64,
+    unit_y: f64,
+    f: impl Fn(f64) -> f64,
+    style: Style,
+) -> NodeId {
+    graph.add(
+        Mobject::new(geometry::area_under(x_min, x_max, samples, unit_x, unit_y, f))
+            .with_style(style)
+            .named("area"),
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RiemannSample {
+    Left,
+    Right,
+    Center,
+}
+
+/// Equal-width Riemann rectangles under `f` on `[x_min, x_max]`.
+pub fn add_riemann_rects(
+    graph: &mut SceneGraph,
+    x_min: f64,
+    x_max: f64,
+    n: usize,
+    unit_x: f64,
+    unit_y: f64,
+    f: impl Fn(f64) -> f64,
+    sample: RiemannSample,
+    color_a: crate::peniko::Color,
+    color_b: crate::peniko::Color,
+    style_opacity: f32,
+) -> NodeId {
+    let n = n.max(1);
+    let dx = (x_max - x_min) / n as f64;
+    let group = graph.add(Mobject::group().named("riemann"));
+    for i in 0..n {
+        let x0 = x_min + i as f64 * dx;
+        let x1 = x0 + dx;
+        let xs = match sample {
+            RiemannSample::Left => x0,
+            RiemannSample::Right => x1,
+            RiemannSample::Center => 0.5 * (x0 + x1),
+        };
+        let y = f(xs);
+        let cx = 0.5 * (x0 + x1) * unit_x;
+        let cy = 0.5 * y * unit_y;
+        let path = geometry::rect(Point::new(cx, cy), (x1 - x0) * unit_x, (y * unit_y).abs());
+        let t = if n <= 1 {
+            0.0
+        } else {
+            i as f32 / (n - 1) as f32
+        };
+        let style = Style::filled(lerp_color(color_a, color_b, t))
+            .with_stroke(palette::black(), 1.0)
+            .with_opacity(style_opacity);
+        graph.add_child(group, Mobject::new(path).with_style(style));
+    }
+    group
+}
+
+/// Dashed copy of `target`'s world-space path (Manim `DashedVMobject`).
+pub fn add_dashed_copy(
+    graph: &mut SceneGraph,
+    target: NodeId,
+    num_dashes: usize,
+    dashed_ratio: f64,
+) -> NodeId {
+    let world = graph.world_transform(target);
+    let (path, style) = {
+        let m = graph.get(target);
+        (m.path.clone(), m.style.clone())
+    };
+    let dashed = geometry::dashed_path(&(world * path), num_dashes, dashed_ratio);
+    graph.add(Mobject::new(dashed).with_style(style).named("dashed"))
 }
 
 /// Arc plus a tip (Manim `CurvedArrow`).
@@ -655,6 +777,62 @@ mod tests {
         );
         // 3 circles + 8 radials + 2 axes
         assert_eq!(g.children_of(p).len(), 13);
+    }
+
+    #[test]
+    fn riemann_rects_have_n_children() {
+        let mut g = SceneGraph::new();
+        let id = add_riemann_rects(
+            &mut g,
+            0.0,
+            1.0,
+            6,
+            1.0,
+            1.0,
+            |x| x * x,
+            RiemannSample::Left,
+            palette::blue(),
+            palette::red(),
+            0.7,
+        );
+        assert_eq!(g.children_of(id).len(), 6);
+        assert_eq!(g.get(id).name.as_deref(), Some("riemann"));
+    }
+
+    #[test]
+    fn complex_plane_has_children() {
+        let mut g = SceneGraph::new();
+        let id = add_complex_plane(
+            &mut g,
+            &NumberPlaneOpts {
+                x_min: -2.0,
+                x_max: 2.0,
+                y_min: -1.0,
+                y_max: 1.0,
+                ..NumberPlaneOpts::default()
+            },
+            Style::default().with_stroke(palette::blue_d(), 2.0),
+            Style::default().with_stroke(palette::white(), 3.0),
+        );
+        assert!(!g.children_of(id).is_empty());
+        assert_eq!(g.get(id).name.as_deref(), Some("complex_plane"));
+    }
+
+    #[test]
+    fn dashed_copy_of_circle_is_shorter() {
+        let mut g = SceneGraph::new();
+        let c = g.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        let d = add_dashed_copy(&mut g, c, 8, 0.5);
+        let sl = geometry::path_length(&g.get(c).path);
+        let dl = geometry::path_length(&g.get(d).path);
+        assert!(dl < sl, "dashed={dl} solid={sl}");
+        assert_eq!(g.get(d).name.as_deref(), Some("dashed"));
+    }
+
+    #[test]
+    fn default_number_line_tick_values_nonempty() {
+        let vals = number_line_tick_values(&NumberLineOpts::default());
+        assert!(!vals.is_empty());
     }
 }
 

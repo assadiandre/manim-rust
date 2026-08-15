@@ -117,3 +117,32 @@ fn lerp_paths_endpoints_match() {
     assert!((geometry::path_length(&at0) - lc).abs() / lc < 0.05);
     assert!((geometry::path_length(&at1) - ls).abs() / ls < 0.05);
 }
+
+#[test]
+fn dashed_path_is_shorter_with_subpaths() {
+    let solid = geometry::circle(Point::ORIGIN, 1.0);
+    let dashed = geometry::dashed_path(&solid, 8, 0.5);
+    let sl = geometry::path_length(&solid);
+    let dl = geometry::path_length(&dashed);
+    assert!(dl < sl * 0.7 && dl > sl * 0.3, "dashed={dl} solid={sl}");
+    let moves = dashed
+        .elements()
+        .iter()
+        .filter(|e| matches!(e, manim_core::kurbo::PathEl::MoveTo(_)))
+        .count();
+    assert!(moves >= 2, "expected multiple subpaths, got {moves}");
+
+    let almost_solid = geometry::dashed_path(&solid, 8, 1.0);
+    assert!(!almost_solid.elements().is_empty());
+    let al = geometry::path_length(&almost_solid);
+    assert!(al > sl * 0.8 && al < sl, "ratio=1.0-ish len={al} solid={sl}");
+}
+
+#[test]
+fn area_under_parabola_closes_with_height() {
+    let p = geometry::area_under(-1.0, 1.0, 32, 1.0, 1.0, |x| x * x);
+    let (_, closed) = geometry::flatten_points(&p);
+    assert!(closed);
+    let bb = geometry::bounding_box(&p);
+    assert!(bb.height() > 0.5, "h={}", bb.height());
+}
