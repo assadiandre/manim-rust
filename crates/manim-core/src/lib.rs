@@ -6,6 +6,7 @@
 //! - all mutation goes through `SceneGraph::get_mut` / `mark_dirty` so the
 //!   renderer can skip unchanged frames.
 
+pub mod boolean;
 pub mod camera;
 pub mod constants;
 pub mod construct;
@@ -15,7 +16,9 @@ pub mod layout;
 pub mod mobject;
 pub mod scene;
 pub mod style;
+mod svg;
 
+pub use boolean::{add_boolean, boolean_path, BooleanOp};
 pub use camera::{Camera, OrthoCamera2D};
 pub use constants::{
     DEFAULT_ARROW_TIP_LENGTH, DEFAULT_DOT_RADIUS, DEFAULT_MOBJECT_TO_EDGE_BUFFER,
@@ -36,6 +39,7 @@ pub use decimal::DigitAtlas;
 pub use mobject::Mobject;
 pub use scene::{NodeId, SceneGraph};
 pub use style::{lerp_color, palette, Style};
+pub use svg::{add_svg, svg_mobjects, SvgError};
 
 // Re-export the data model so downstream crates stay version-consistent.
 pub use kurbo;

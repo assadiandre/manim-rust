@@ -128,4 +128,7 @@ crates/
   TangentLine / get_vertical_line_to_graph; ShowIncreasingSubsets and
   CyclicReplace as compiled timeline data; TransformMatchingTex pairs
   `tex-part:` children by substring.
+- M24 SVGMobject via in-process `usvg` (paths only, no Typst SVG
+  round-trip) and Union / Intersection / Difference / Exclusion as
+  authoring-time `i_overlay` path ops.
 - M8 (later) 3D spike: cube pass composited under 2D overlay

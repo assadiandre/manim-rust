@@ -9,3 +9,5 @@ description = "Geometry kernel, styles, and dirty-tracked scene graph for manim_
 # identical across the workspace (see manim-render).
 kurbo = "0.13.1"
 peniko = "0.6.1"
+i_overlay = "8"
+usvg = "0.48"
