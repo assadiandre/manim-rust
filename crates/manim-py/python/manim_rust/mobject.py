@@ -336,6 +336,57 @@ class Tex(MathTex):
     pass
 
 
+class DecimalNumber(Mobject):
+    def __init__(self, value=0.0, num_decimal_places=2, color=WHITE, font_size=48.0):
+        super().__init__()
+        self.value = float(value)
+        self.num_decimal_places = num_decimal_places
+        self.color = color
+        self.font_size = font_size
+
+    def _add(self, raw):
+        return raw.add_decimal_atlas(
+            self.value,
+            self.num_decimal_places,
+            color=self.color,
+            font_size_pt=self.font_size,
+        )
+
+    def set_value(self, value):
+        self.value = float(value)
+        return self
+
+    @property
+    def animate(self):
+        return _DecimalAnimate(self)
+
+
+class ValueTracker:
+    """Authoring-time float. Animate a DecimalNumber, not this, for display."""
+
+    def __init__(self, value=0.0):
+        self._value = float(value)
+
+    def get_value(self):
+        return self._value
+
+    def set_value(self, value):
+        self._value = float(value)
+        return self
+
+
+class DashedVMobject(Mobject):
+    def __init__(self, vmobject, num_dashes=15, dashed_ratio=0.5):
+        super().__init__()
+        self.vmobject = vmobject
+        self.num_dashes = num_dashes
+        self.dashed_ratio = dashed_ratio
+
+    def _add(self, raw):
+        src = self.vmobject._materialize(raw)
+        return raw.add_dashed_copy(src, self.num_dashes, self.dashed_ratio)
+
+
 class Title(Mobject):
     def __init__(self, source, color=WHITE, font_size=48.0):
         super().__init__()
@@ -508,3 +559,18 @@ class _Animate:
         from manim_rust.animation import _BoundAnim
 
         return _BoundAnim(self.mobject, "recolor", self.run_time, self.rate_func, color=color)
+
+
+class _DecimalAnimate(_Animate):
+    def set_value(self, value):
+        from manim_rust.animation import _BoundAnim
+
+        return _BoundAnim(
+            self.mobject,
+            "changing_decimal",
+            self.run_time,
+            self.rate_func,
+            from_value=self.mobject.value,
+            to_value=float(value),
+            places=self.mobject.num_decimal_places,
+        )

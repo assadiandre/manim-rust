@@ -15,7 +15,8 @@ use manim_core::constants::{
 use manim_core::kurbo::{Point, Vec2};
 use manim_core::peniko::Color;
 use manim_core::{
-    add_angle as rust_add_angle, add_area_under as rust_add_area_under,
+    add_angle as rust_add_angle, add_area_between as rust_add_area_between,
+    add_area_under as rust_add_area_under,
     add_arrow as rust_add_arrow, add_arrow_field as rust_add_arrow_field,
     add_axes as rust_add_axes, add_background_rect as rust_add_background_rect,
     add_brace as rust_add_brace, add_complex_plane as rust_add_complex_plane,
@@ -33,8 +34,10 @@ use manim_typst::{
     add_axes_labels as rust_add_axes_labels, add_brace_label as rust_add_brace_label,
     add_code as rust_add_code, add_decimal as rust_add_decimal, add_math,
     add_matrix as rust_add_matrix, add_number_line_labels as rust_add_number_line_labels,
-    add_table as rust_add_table, add_tex as add_latex, add_text as rust_add_text,
-    add_title as rust_add_title, MathOptions,
+    add_complex_plane_labels as rust_add_complex_plane_labels,
+    add_decimal_atlas as rust_add_decimal_atlas, add_table as rust_add_table,
+    add_tex as add_latex, add_text as rust_add_text, add_title as rust_add_title,
+    digit_atlas, MathOptions,
 };
 
 fn parse_color(s: &str) -> PyResult<Color> {
@@ -1377,6 +1380,110 @@ impl PyScene {
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
+    #[pyo3(signature = (
+        f,
+        g,
+        x_min,
+        x_max,
+        samples = 80,
+        unit_size = 1.0,
+        fill = Some("blue".to_string()),
+        opacity = 0.4
+    ))]
+    fn add_area_between(
+        &mut self,
+        f: Bound<'_, PyAny>,
+        g: Bound<'_, PyAny>,
+        x_min: f64,
+        x_max: f64,
+        samples: usize,
+        unit_size: f64,
+        fill: Option<String>,
+        opacity: f32,
+    ) -> PyResult<usize> {
+        let n = samples.max(2);
+        let mut ys_f = Vec::with_capacity(n);
+        let mut ys_g = Vec::with_capacity(n);
+        for i in 0..n {
+            let t = i as f64 / (n - 1) as f64;
+            let x = x_min + (x_max - x_min) * t;
+            ys_f.push(f.call1((x,))?.extract::<f64>()?);
+            ys_g.push(g.call1((x,))?.extract::<f64>()?);
+        }
+        let mut style = build_style(fill.as_deref(), None, 0.0)?;
+        style.opacity = opacity;
+        Ok(rust_add_area_between(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            n,
+            unit_size,
+            unit_size,
+            |x| {
+                let t = (x - x_min) / (x_max - x_min).max(1e-9);
+                let i = (t * (n - 1) as f64).round().clamp(0.0, (n - 1) as f64) as usize;
+                ys_f[i]
+            },
+            |x| {
+                let t = (x - x_min) / (x_max - x_min).max(1e-9);
+                let i = (t * (n - 1) as f64).round().clamp(0.0, (n - 1) as f64) as usize;
+                ys_g[i]
+            },
+            style,
+        ))
+    }
+
+    #[pyo3(signature = (value = 0.0, places = 2, x = 0.0, y = 0.0, color = None, font_size_pt = 48.0))]
+    fn add_decimal_atlas(
+        &mut self,
+        value: f64,
+        places: usize,
+        x: f64,
+        y: f64,
+        color: Option<String>,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        let options = MathOptions {
+            font_size_pt,
+            color: color.as_deref().map(parse_color).transpose()?,
+        };
+        let atlas =
+            digit_atlas(&options).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let id = rust_add_decimal_atlas(&mut self.scene.graph, value, places, &atlas, &options);
+        self.scene.graph.get_mut(id).transform =
+            manim_core::kurbo::Affine::translate((x, y));
+        Ok(id)
+    }
+
+    #[pyo3(signature = (x_min = -3.0, x_max = 3.0, y_min = -2.0, y_max = 2.0, unit_size = 1.0, include_tip = true, font_size_pt = 28.0))]
+    fn add_complex_plane_labels(
+        &mut self,
+        x_min: f64,
+        x_max: f64,
+        y_min: f64,
+        y_max: f64,
+        unit_size: f64,
+        include_tip: bool,
+        font_size_pt: f64,
+    ) -> PyResult<usize> {
+        rust_add_complex_plane_labels(
+            &mut self.scene.graph,
+            x_min,
+            x_max,
+            1.0,
+            y_min,
+            y_max,
+            1.0,
+            unit_size,
+            include_tip,
+            &MathOptions {
+                font_size_pt,
+                color: None,
+            },
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+    }
+
     #[pyo3(signature = (source, target, duration = 1.0))]
     fn play_fade_transform(&mut self, source: NodeId, target: NodeId, duration: f64) {
         self.scene.play_fade_transform(source, target, duration);
@@ -1605,6 +1712,15 @@ impl PyScene {
                     let shift_dst =
                         Animation::shift(&self.scene.graph, dest, delta, duration).with_easing(e);
                     anims.extend([fade_out, shift_src, fade_in, shift_dst]);
+                }
+                "changing_decimal" => {
+                    let places = extra.parse::<usize>().unwrap_or(2);
+                    let atlas = digit_atlas(&MathOptions::default())
+                        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                    anims.push(
+                        Animation::changing_decimal(target, a, b, places, atlas, duration)
+                            .with_easing(e),
+                    );
                 }
                 "flash" => {
                     let color = parse_color(if extra.is_empty() {

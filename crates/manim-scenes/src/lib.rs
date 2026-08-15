@@ -6,14 +6,15 @@ use kurbo::{Affine, Point, Vec2};
 use manim_anim::{Animation, Scene};
 use manim_core::constants::{DOWN, LEFT, RIGHT};
 use manim_core::{
-    add_angle, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace, add_complex_plane,
+    add_angle, add_area_between, add_area_under, add_arrow, add_arrow_field, add_axes, add_brace,
+    add_complex_plane,
     add_curved_arrow, add_dashed_copy, add_number_line, add_number_plane, add_polar_plane,
     add_riemann_rects, add_right_angle, add_surrounding_rect, add_underline, geometry, palette,
     AxesOpts, Mobject, NumberLineOpts, NumberPlaneOpts, PolarPlaneOpts, RiemannSample, Style,
 };
 use manim_typst::{
-    add_code, add_decimal, add_math, add_matrix, add_number_line_labels, add_table, add_text,
-    add_title, MathOptions,
+    add_code, add_complex_plane_labels, add_decimal, add_decimal_atlas, add_math, add_matrix,
+    add_number_line_labels, add_table, add_text, add_title, digit_atlas, MathOptions,
 };
 
 /// The north-star scene: circle draws itself, morphs into a square, and a
@@ -719,6 +720,67 @@ pub fn probes() -> Vec<Probe> {
     )
     .expect("table");
     out.push(probe("table", s, &[0.0]));
+
+    // area between y=x^2 and y=0.4
+    let mut s = Scene::new();
+    add_area_between(
+        &mut s.graph,
+        -2.0,
+        2.0,
+        64,
+        1.0,
+        1.0,
+        |x| 0.35 * x * x,
+        |_| 0.4,
+        Style::filled(palette::blue()).with_opacity(0.55),
+    );
+    s.add(
+        Mobject::new(geometry::plot(-2.2, 2.2, 64, 1.0, 1.0, |x| 0.35 * x * x))
+            .with_style(Style::default().with_stroke(palette::yellow(), 4.0)),
+    );
+    out.push(probe("areax", s, &[0.0]));
+
+    // complex plane with i labels
+    let mut s = Scene::new();
+    add_complex_plane(
+        &mut s.graph,
+        &NumberPlaneOpts {
+            x_min: -3.0,
+            x_max: 3.0,
+            y_min: -2.0,
+            y_max: 2.0,
+            faded_line_ratio: 1,
+            ..NumberPlaneOpts::default()
+        },
+        Style::default()
+            .with_stroke(palette::blue_d(), 2.0)
+            .with_opacity(0.7),
+        Style::default().with_stroke(palette::white(), 3.0),
+    );
+    add_complex_plane_labels(
+        &mut s.graph,
+        -3.0,
+        3.0,
+        1.0,
+        -2.0,
+        2.0,
+        1.0,
+        1.0,
+        false,
+        &MathOptions {
+            font_size_pt: 28.0,
+            ..MathOptions::default()
+        },
+    )
+    .expect("complex labels");
+    out.push(probe("clabels", s, &[0.0]));
+
+    // ChangingDecimal: 1 → 12 via baked atlas
+    let mut s = Scene::new();
+    let atlas = digit_atlas(&MathOptions::default()).expect("atlas");
+    let dec = add_decimal_atlas(&mut s.graph, 1.0, 0, &atlas, &MathOptions::default());
+    s.play([Animation::changing_decimal(dec, 1.0, 12.0, 0, atlas, 1.2)]);
+    out.push(probe("decimal", s, &[0.0, 0.4, 0.8, 1.2]));
 
     out
 }

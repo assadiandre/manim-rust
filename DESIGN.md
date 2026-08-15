@@ -100,4 +100,7 @@ crates/
 - M13 CE object API: deferred `Circle()` / `Create(c)` / `c.animate.shift`,
   `Scene.construct()`, ArrowVectorField (baked) and Table (Typst text grid).
   Python still only *builds* timeline data; the per-frame path stays in Rust.
+- M14 graphing + live decimals: area between two baked curves, DashedVMobject
+  on groups, ComplexPlane `i` labels, ChangingDecimal from a Typst digit
+  atlas (no Python / no Typst in the frame loop).
 - M8 (later) 3D spike: cube pass composited under 2D overlay

@@ -78,6 +78,9 @@ into Python. Plain text uses in-process Typst (`add_text` / `add_title`
 (`play_camera_shift` / `play_camera_zoom`), not a scene-graph node.
 Color names accept the Manim A–E palette (`BLUE`, `YELLOW` / `yellow_c`, …).
 `ArrowVectorField` and `Table` are sampled / typeset once at authoring time.
+`DecimalNumber.animate.set_value` rebuilds digits from a baked Typst atlas
+(no Python in the frame loop). `add_area_between` fills the band between two
+curves sampled at authoring time.
 
 ```python
 axes = scene.add_axes(x_min=-3, x_max=3, y_min=-1, y_max=3)

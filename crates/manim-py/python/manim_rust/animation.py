@@ -172,6 +172,10 @@ class MoveAlongPath(Animation):
 class Transform(Animation):
     kind = "morph"
 
+
+class ReplacementTransform(Transform):
+    pass
+
     def __init__(self, mobject, target_mobject, **kwargs):
         super().__init__(mobject, **kwargs)
         self.target_mobject = target_mobject
@@ -256,4 +260,9 @@ class _BoundAnim(Animation):
             cx, cy = raw.center_of(target)
             kind = "shift"
             a, b = x - cx, y - cy
+        elif kind == "changing_decimal":
+            a = float(self.payload["from_value"])
+            b = float(self.payload["to_value"])
+            extra = str(int(self.payload.get("places", 2)))
+            self.mobject.value = b
         return (kind, target, duration, easing, a, b, extra)
