@@ -1262,6 +1262,21 @@ class VGroup(Mobject):
         return self.submobjects[i]
 
 
+class VDict(VGroup):
+    """Named submobject map. `show_keys` is ignored (no per-frame labels)."""
+
+    def __init__(self, mapping=None, show_keys=False):
+        mapping = dict(mapping or {})
+        super().__init__(*mapping.values())
+        self.submob_dict = mapping
+        self.show_keys = show_keys
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return super().__getitem__(key)
+        return self.submob_dict[key]
+
+
 class _AxesPlot(VMobject):
     def __init__(self, axes, func, x_min, x_max, **kwargs):
         super().__init__(**kwargs)

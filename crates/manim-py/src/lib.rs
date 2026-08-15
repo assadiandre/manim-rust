@@ -2713,6 +2713,21 @@ impl PyScene {
                         Animation::restore(&self.scene.graph, target, duration).with_easing(e),
                     );
                 }
+                "transform_from_copy" => {
+                    let dest = a as usize;
+                    anims.push(
+                        Animation::transform_from_copy(&self.scene.graph, target, dest, duration)
+                            .with_easing(e),
+                    );
+                }
+                "broadcast" => {
+                    anims.extend(
+                        self.scene
+                            .broadcast_anims(target, duration)
+                            .into_iter()
+                            .map(|an| an.with_easing(e)),
+                    );
+                }
                 "transform_matching" => {
                     let dest = a as usize;
                     anims.extend(

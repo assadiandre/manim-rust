@@ -134,6 +134,27 @@ fn golden_m22_static() {
 }
 
 #[test]
+fn golden_m29() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    for (name, times) in [
+        ("tfc", [0.0, 0.5, 1.0].as_slice()),
+        ("broadcast", &[0.0, 0.6, 1.5]),
+        ("fadeto", &[0.0, 0.5, 1.0]),
+    ] {
+        let scene = manim_scenes::probes()
+            .into_iter()
+            .find(|p| p.name == name)
+            .unwrap_or_else(|| panic!("{name} probe"));
+        for &t in times {
+            let mut sim = scene.scene.graph.clone();
+            scene.scene.timeline.apply(&mut sim, t);
+            let px = r.render_frame(&mut sim).unwrap().to_vec();
+            assert_golden(&px, 480, 270, &format!("{name}_{t:.1}.png"));
+        }
+    }
+}
+
+#[test]
 fn golden_m28_static() {
     let mut r = Renderer::new(480, 270, black()).unwrap();
     let scene = manim_scenes::probes()

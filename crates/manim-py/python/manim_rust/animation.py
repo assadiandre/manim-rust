@@ -203,9 +203,22 @@ class MoveAlongPath(Animation):
 class Transform(Animation):
     kind = "morph"
 
+    def __init__(self, mobject, target_mobject=None, **kwargs):
+        super().__init__(mobject, **kwargs)
+        self.target_mobject = target_mobject
+
+    def _spec(self, raw, run_time=None, rate_func=None):
+        kind, target, duration, easing, _, _, extra = super()._spec(raw, run_time, rate_func)
+        other = _node_id(self.target_mobject, raw) if self.target_mobject is not None else 0
+        return (kind, target, duration, easing, float(other), 0.0, extra)
+
 
 class ReplacementTransform(Transform):
     pass
+
+
+class TransformFromCopy(Animation):
+    kind = "transform_from_copy"
 
     def __init__(self, mobject, target_mobject, **kwargs):
         super().__init__(mobject, **kwargs)
@@ -215,6 +228,22 @@ class ReplacementTransform(Transform):
         kind, target, duration, easing, _, _, extra = super()._spec(raw, run_time, rate_func)
         other = _node_id(self.target_mobject, raw)
         return (kind, target, duration, easing, float(other), 0.0, extra)
+
+
+class Broadcast(Animation):
+    kind = "broadcast"
+
+
+class FadeToColor(Animation):
+    kind = "recolor"
+
+    def __init__(self, mobject, color, **kwargs):
+        super().__init__(mobject, **kwargs)
+        self.color = color
+
+    def _spec(self, raw, run_time=None, rate_func=None):
+        kind, target, duration, easing, a, b, _ = super()._spec(raw, run_time, rate_func)
+        return (kind, target, duration, easing, a, b, str(self.color))
 
 
 class TransformMatchingShapes(Animation):

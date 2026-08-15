@@ -1386,7 +1386,7 @@ pub fn probes() -> Vec<Probe> {
     s.play_restore(home, 1.0);
     out.push(probe("restore", s, &[0.0, 0.5, 1.0]));
 
-    // become: left circle takes the square's path/style, stays put
+    // become: left circle takes the square's path/style/pose (CE default)
     let mut s = Scene::new();
     let a = s.add(
         Mobject::new(geometry::circle(Point::new(-2.4, 0.0), 0.45))
@@ -1399,6 +1399,38 @@ pub fn probes() -> Vec<Probe> {
     s.graph.become_mobject(a, b);
     s.graph.get_mut(b).visible = false;
     out.push(probe("become", s, &[0.0]));
+
+    // TransformFromCopy: square starts as the left circle and becomes itself
+    let mut s = Scene::new();
+    let src = s.add(
+        Mobject::new(geometry::circle(Point::new(-2.4, 0.0), 0.45))
+            .with_style(Style::filled(palette::yellow()).with_stroke(palette::white(), 4.0)),
+    );
+    let dst = s.add(
+        Mobject::new(geometry::square(Point::new(2.4, 0.0), 1.6))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play_transform_from_copy(src, dst, 1.0);
+    out.push(probe("tfc", s, &[0.0, 0.5, 1.0]));
+
+    // Broadcast: copies grow from the origin and fade
+    let mut s = Scene::new();
+    let ring = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 2.2))
+            .with_style(Style::default().no_fill().with_stroke(palette::teal(), 5.0)),
+    );
+    s.play_broadcast(ring, 1.5);
+    s.graph.get_mut(ring).visible = false;
+    out.push(probe("broadcast", s, &[0.0, 0.6, 1.5]));
+
+    // FadeToColor
+    let mut s = Scene::new();
+    let blob = s.add(
+        Mobject::new(geometry::circle(Point::ORIGIN, 1.1))
+            .with_style(Style::filled(palette::yellow()).with_stroke(palette::white(), 4.0)),
+    );
+    s.play([Animation::recolor(&s.graph, blob, palette::red(), 1.0)]);
+    out.push(probe("fadeto", s, &[0.0, 0.5, 1.0]));
 
     out
 }
