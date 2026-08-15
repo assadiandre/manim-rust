@@ -282,6 +282,28 @@ impl Scene {
         self.play([Animation::shrink_to_center(&self.graph, target, duration)]);
     }
 
+    /// Source fades out while traveling toward the target; the target fades
+    /// in while traveling from the source (Manim `FadeTransform`).
+    ///
+    /// The target is moved to the source center first so `Shift` snapshots
+    /// `from` at that position; `apply_final` restores the target at `dst`.
+    /// Stretch is omitted: `Shift` and `Scale` share `Prop::Transform`.
+    pub fn play_fade_transform(&mut self, source: NodeId, target: NodeId, duration: f64) {
+        let src_c = self.graph.center_of(source);
+        let dst_c = self.graph.center_of(target);
+        let delta = dst_c - src_c;
+
+        let fade_out = Animation::fade_out(&self.graph, source, duration);
+        let shift_src = Animation::shift(&self.graph, source, delta, duration);
+
+        self.graph.move_to(target, src_c);
+
+        let fade_in = Animation::fade_in(&self.graph, target, duration);
+        let shift_dst = Animation::shift(&self.graph, target, delta, duration);
+
+        self.play([fade_out, shift_src, fade_in, shift_dst]);
+    }
+
     pub fn duration(&self) -> f64 {
         self.now
     }
@@ -575,5 +597,41 @@ mod tests {
         scene.timeline.apply(&mut sim, 1.0);
         let p = sim.get(c).transform * Point::new(1.0, 0.0);
         assert!((p.x - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn fade_transform_hides_source_shows_target() {
+        let mut scene = Scene::new();
+        let source = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.5)));
+        let target = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.5)));
+        scene.play_fade_transform(source, target, 1.0);
+
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        assert!((sim.get(source).style.opacity - 1.0).abs() < 1e-6);
+        assert_eq!(sim.get(target).style.opacity, 0.0);
+
+        scene.timeline.apply(&mut sim, 1.0);
+        assert_eq!(sim.get(source).style.opacity, 0.0);
+        assert!((sim.get(target).style.opacity - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn fade_transform_target_travels() {
+        let mut scene = Scene::new();
+        let source = scene.add(Mobject::new(geometry::circle(Point::new(-2.0, 0.0), 0.5)));
+        let target = scene.add(Mobject::new(geometry::circle(Point::new(2.0, 0.0), 0.5)));
+        let src_start = scene.graph.center_of(source);
+        let dst_end = scene.graph.center_of(target);
+        scene.play_fade_transform(source, target, 1.0);
+
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let t0 = sim.center_of(target);
+        assert!((t0.x - src_start.x).abs() < 0.05 && (t0.y - src_start.y).abs() < 0.05, "t0={t0:?}");
+
+        scene.timeline.apply(&mut sim, 1.0);
+        let t1 = sim.center_of(target);
+        assert!((t1.x - dst_end.x).abs() < 0.05 && (t1.y - dst_end.y).abs() < 0.05, "t1={t1:?}");
     }
 }
