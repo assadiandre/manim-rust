@@ -4,10 +4,11 @@
 //! This is user SVG import, not a Typst round-trip.
 
 use kurbo::{Affine, BezPath, Point, Rect, Shape};
-use peniko::Color;
+use peniko::{Color, ImageData};
 use usvg::tiny_skia_path::PathSegment;
 
 use crate::mobject::Mobject;
+use crate::raster::raster_from_bytes;
 use crate::scene::{NodeId, SceneGraph};
 use crate::style::Style;
 
@@ -22,7 +23,7 @@ impl std::fmt::Display for SvgError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SvgError::Parse(e) => write!(f, "svg parse error: {e}"),
-            SvgError::Empty => write!(f, "svg contained no visible paths"),
+            SvgError::Empty => write!(f, "svg contained no visible paths or images"),
         }
     }
 }
@@ -32,6 +33,7 @@ impl std::error::Error for SvgError {}
 struct Fragment {
     path: BezPath,
     style: Style,
+    image: Option<ImageData>,
 }
 
 /// Parse `svg` once into centered, y-up path mobjects of logical height `height`.
@@ -76,7 +78,11 @@ pub fn svg_mobjects(svg: &str, height: f64) -> Result<Vec<Mobject>, SvgError> {
             if path.elements().is_empty() {
                 None
             } else {
-                Some(Mobject::new(path).with_style(frag.style))
+                let mut m = Mobject::new(path).with_style(frag.style);
+                if let Some(img) = frag.image {
+                    m = m.with_image(img);
+                }
+                Some(m)
             }
         })
         .collect();
@@ -107,8 +113,14 @@ fn walk_group(group: &usvg::Group, out: &mut Vec<Fragment>) {
                     }
                 }
             }
-            // Paths-only for this slice.
-            usvg::Node::Image(_) | usvg::Node::Text(_) => {}
+            usvg::Node::Image(image) => {
+                if image.is_visible() {
+                    if let Some(frag) = image_to_fragment(image) {
+                        out.push(frag);
+                    }
+                }
+            }
+            usvg::Node::Text(_) => {}
         }
     }
 }
@@ -134,7 +146,35 @@ fn path_to_fragment(path: &usvg::Path) -> Option<Fragment> {
             style.stroke_opacity = stroke.opacity().get();
         }
     }
-    Some(Fragment { path: bez, style })
+    Some(Fragment {
+        path: bez,
+        style,
+        image: None,
+    })
+}
+
+fn image_to_fragment(image: &usvg::Image) -> Option<Fragment> {
+    let bytes: &[u8] = match image.kind() {
+        usvg::ImageKind::JPEG(b)
+        | usvg::ImageKind::PNG(b)
+        | usvg::ImageKind::GIF(b)
+        | usvg::ImageKind::WEBP(b) => b.as_slice(),
+        usvg::ImageKind::SVG(_) => return None,
+    };
+    let raster = raster_from_bytes(bytes).ok()?;
+    let bb = image.abs_bounding_box();
+    let path = Rect::new(
+        f64::from(bb.x()),
+        f64::from(bb.y()),
+        f64::from(bb.x() + bb.width()),
+        f64::from(bb.y() + bb.height()),
+    )
+    .to_path(0.1);
+    Some(Fragment {
+        path,
+        style: Style::default().no_fill().no_stroke(),
+        image: Some(raster),
+    })
 }
 
 fn tiny_path_to_bez(data: &usvg::tiny_skia_path::Path) -> BezPath {
@@ -219,6 +259,24 @@ mod tests {
             .filter(|&&c| !graph.get(c).path.elements().is_empty())
             .count();
         assert!(n_paths >= 2, "expected at least 2 path children, got {n_paths}");
+    }
+
+    const EMBED_PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR4nGP4/5/hf8SRu/8ZQASIAwBqPQvrM5aq/wAAAABJRU5ErkJggg==";
+
+    #[test]
+    fn svg_embedded_png_has_image_child() {
+        let svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+                <image href="data:image/png;base64,{EMBED_PNG}" x="0" y="0" width="10" height="10"/>
+            </svg>"##
+        );
+        let mut graph = SceneGraph::new();
+        let id = add_svg(&mut graph, &svg, 2.0).expect("embedded png svg");
+        let kids = graph.children_of(id);
+        assert!(
+            kids.iter().any(|&c| graph.get(c).image.is_some()),
+            "expected a raster child from <image>"
+        );
     }
 
     #[test]

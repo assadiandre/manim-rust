@@ -8,7 +8,7 @@ use kurbo::{Affine, BezPath, Point, Vec2};
 use manim_core::geometry;
 use manim_core::peniko::Color;
 use manim_core::style::lerp_color;
-use manim_core::{DigitAtlas, NodeId, SceneGraph};
+use manim_core::{DigitAtlas, NodeId, SceneGraph, Style};
 
 use crate::easing::Easing;
 
@@ -88,6 +88,16 @@ pub enum AnimationKind {
         amplitude: f64,
         ripples: f64,
     },
+    /// Animate from the current snapshot to a prior `save_state` (Manim `Restore`).
+    /// Writes transform, style, and path in one kind so they do not fight.
+    Restore {
+        from_path: BezPath,
+        to_path: BezPath,
+        from_transform: Affine,
+        to_transform: Affine,
+        from_style: Style,
+        to_style: Style,
+    },
 }
 
 /// The scene property an animation drives. Animations are grouped by
@@ -120,7 +130,8 @@ impl AnimationKind {
             | AnimationKind::Wiggle { .. }
             | AnimationKind::MoveAlongPath { .. }
             | AnimationKind::SpinIn { .. }
-            | AnimationKind::Travel { .. } => Prop::Transform,
+            | AnimationKind::Travel { .. }
+            | AnimationKind::Restore { .. } => Prop::Transform,
             AnimationKind::Recolor { .. } => Prop::Color,
         }
     }
@@ -363,6 +374,32 @@ impl Animation {
         )
     }
 
+    /// Interpolate from the *current* path/transform/style to the last
+    /// `save_state` snapshot. If none was saved, `from` and `to` match.
+    pub fn restore(scene: &SceneGraph, target: NodeId, duration: f64) -> Self {
+        let (from_path, from_transform, from_style) = {
+            let m = scene.get(target);
+            (m.path.clone(), m.transform, m.style.clone())
+        };
+        let (to_path, to_transform, to_style) = match scene.saved_state(target) {
+            Some(saved) => (saved.path.clone(), saved.transform, saved.style.clone()),
+            None => (from_path.clone(), from_transform, from_style.clone()),
+        };
+        Self::new(
+            target,
+            AnimationKind::Restore {
+                from_path,
+                to_path,
+                from_transform,
+                to_transform,
+                from_style,
+                to_style,
+            },
+            0.0,
+            duration,
+        )
+    }
+
     pub fn apply_wave(
         scene: &SceneGraph,
         target: NodeId,
@@ -546,6 +583,25 @@ impl Animation {
                 scene.get_mut(self.target).path =
                     wave_path(full, *amplitude, *ripples, alpha);
             }
+            AnimationKind::Restore {
+                from_path,
+                to_path,
+                from_transform,
+                to_transform,
+                from_style,
+                to_style,
+            } => {
+                let path = geometry::lerp_paths(from_path, to_path, MORPH_SAMPLES, alpha);
+                let transform = lerp_affine(*from_transform, *to_transform, alpha);
+                let t = alpha as f32;
+                let m = scene.get_mut(self.target);
+                m.path = path;
+                m.transform = transform;
+                m.style.opacity =
+                    from_style.opacity + (to_style.opacity - from_style.opacity) * t;
+                m.style.fill = lerp_opt_color(from_style.fill, to_style.fill, alpha);
+                m.style.stroke = lerp_opt_color(from_style.stroke, to_style.stroke, alpha);
+            }
         }
     }
 
@@ -559,6 +615,27 @@ impl Animation {
 
     pub(crate) fn apply_at_alpha(&self, scene: &mut SceneGraph, alpha: f64) {
         self.apply(scene, alpha);
+    }
+}
+
+fn lerp_affine(from: Affine, to: Affine, alpha: f64) -> Affine {
+    let a = from.as_coeffs();
+    let b = to.as_coeffs();
+    Affine::new([
+        a[0] + (b[0] - a[0]) * alpha,
+        a[1] + (b[1] - a[1]) * alpha,
+        a[2] + (b[2] - a[2]) * alpha,
+        a[3] + (b[3] - a[3]) * alpha,
+        a[4] + (b[4] - a[4]) * alpha,
+        a[5] + (b[5] - a[5]) * alpha,
+    ])
+}
+
+fn lerp_opt_color(from: Option<Color>, to: Option<Color>, alpha: f64) -> Option<Color> {
+    match (from, to) {
+        (Some(a), Some(b)) => Some(lerp_color(a, b, alpha as f32)),
+        (_, t) if alpha >= 1.0 => t,
+        (f, _) => f,
     }
 }
 

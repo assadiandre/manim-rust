@@ -12,6 +12,8 @@ pub type NodeId = usize;
 #[derive(Clone, Debug)]
 struct Node {
     mobject: Mobject,
+    /// Last `save_state` snapshot (path/transform/style/visible).
+    saved: Option<Mobject>,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
     dirty: bool,
@@ -33,6 +35,7 @@ impl SceneGraph {
         let id = self.nodes.len();
         self.nodes.push(Node {
             mobject,
+            saved: None,
             parent: None,
             children: Vec::new(),
             dirty: true,
@@ -45,6 +48,7 @@ impl SceneGraph {
         let id = self.nodes.len();
         self.nodes.push(Node {
             mobject,
+            saved: None,
             parent: Some(parent),
             children: Vec::new(),
             dirty: true,
@@ -245,6 +249,23 @@ impl SceneGraph {
             self.set_opacity(c, opacity);
         }
     }
+
+    /// Snapshot the node's current `Mobject`. A later save overwrites.
+    pub fn save_state(&mut self, id: NodeId) {
+        self.nodes[id].saved = Some(self.nodes[id].mobject.clone());
+    }
+
+    /// Copy the last snapshot back. No-op if none. Marks dirty via `get_mut`.
+    pub fn restore(&mut self, id: NodeId) {
+        let Some(saved) = self.nodes[id].saved.clone() else {
+            return;
+        };
+        *self.get_mut(id) = saved;
+    }
+
+    pub fn saved_state(&self, id: NodeId) -> Option<&Mobject> {
+        self.nodes[id].saved.as_ref()
+    }
 }
 
 #[cfg(test)]
@@ -292,5 +313,35 @@ mod tests {
         g.set_z_index(a, 5);
         let order: Vec<NodeId> = g.traverse().into_iter().map(|(id, _, _)| id).collect();
         assert_eq!(order, vec![b, a]);
+    }
+
+    #[test]
+    fn save_then_mutate_then_restore_returns_center_and_opacity() {
+        let mut g = SceneGraph::new();
+        let c = g.add(Mobject::new(geometry::circle(kurbo::Point::ORIGIN, 1.0)));
+        let center0 = g.center_of(c);
+        let opacity0 = g.get(c).style.opacity;
+        g.save_state(c);
+        g.shift(c, kurbo::Vec2::new(2.0, 1.0));
+        g.set_opacity(c, 0.25);
+        let moved = g.center_of(c);
+        assert!((moved.x - (center0.x + 2.0)).abs() < 1e-9);
+        assert!((g.get(c).style.opacity - 0.25).abs() < 1e-6);
+
+        g.clear_dirty();
+        g.restore(c);
+        assert!(g.any_dirty());
+        let center1 = g.center_of(c);
+        assert!((center1.x - center0.x).abs() < 1e-9 && (center1.y - center0.y).abs() < 1e-9);
+        assert!((g.get(c).style.opacity - opacity0).abs() < 1e-6);
+
+        // No snapshot: restore is a no-op.
+        let mut g2 = SceneGraph::new();
+        let d = g2.add(Mobject::new(geometry::circle(kurbo::Point::ORIGIN, 1.0)));
+        g2.shift(d, kurbo::Vec2::new(3.0, 0.0));
+        let before = g2.center_of(d);
+        g2.restore(d);
+        let after = g2.center_of(d);
+        assert!((after.x - before.x).abs() < 1e-9 && (after.y - before.y).abs() < 1e-9);
     }
 }

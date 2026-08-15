@@ -456,6 +456,11 @@ impl Scene {
         self.play([Animation::apply_wave(&self.graph, target, 0.25, 2.0, duration)]);
     }
 
+    /// Animate from the current state back to the last `save_state` snapshot.
+    pub fn play_restore(&mut self, target: NodeId, duration: f64) {
+        self.play([Animation::restore(&self.graph, target, duration)]);
+    }
+
     pub fn duration(&self) -> f64 {
         self.now
     }
@@ -1220,5 +1225,46 @@ mod tests {
         assert!(h0 < 0.05, "start height {h0}");
         assert!(h1 > 0.2, "mid height {h1}");
         assert!(h2 < 0.05, "end height {h2}");
+    }
+
+    #[test]
+    fn play_restore_interpolates_mid_opacity_and_center() {
+        let mut scene = Scene::new();
+        let c = scene.add(Mobject::new(geometry::circle(Point::ORIGIN, 1.0)));
+        let saved_c = scene.graph.center_of(c);
+        let saved_o = scene.graph.get(c).style.opacity;
+        scene.graph.save_state(c);
+        scene.graph.shift(c, Vec2::new(2.0, 0.0));
+        scene.graph.set_opacity(c, 0.0);
+        let cur_c = scene.graph.center_of(c);
+        let cur_o = scene.graph.get(c).style.opacity;
+        scene.play_restore(c, 1.0);
+
+        let mut sim = scene.graph.clone();
+        scene.timeline.apply(&mut sim, 0.0);
+        let p0 = sim.center_of(c);
+        assert!((p0.x - cur_c.x).abs() < 0.05 && (p0.y - cur_c.y).abs() < 0.05);
+        assert!((sim.get(c).style.opacity - cur_o).abs() < 1e-6);
+
+        scene.timeline.apply(&mut sim, 0.5);
+        let mid_c = sim.center_of(c);
+        let mid_o = sim.get(c).style.opacity;
+        let lo_x = saved_c.x.min(cur_c.x);
+        let hi_x = saved_c.x.max(cur_c.x);
+        assert!(
+            mid_c.x > lo_x + 0.2 && mid_c.x < hi_x - 0.2,
+            "mid center {mid_c:?} between {saved_c:?} and {cur_c:?}"
+        );
+        let lo_o = saved_o.min(cur_o);
+        let hi_o = saved_o.max(cur_o);
+        assert!(
+            mid_o > lo_o + 0.2 && mid_o < hi_o - 0.2,
+            "mid opacity {mid_o} between {saved_o} and {cur_o}"
+        );
+
+        scene.timeline.apply(&mut sim, 1.0);
+        let p1 = sim.center_of(c);
+        assert!((p1.x - saved_c.x).abs() < 0.05 && (p1.y - saved_c.y).abs() < 0.05);
+        assert!((sim.get(c).style.opacity - saved_o).abs() < 1e-6);
     }
 }

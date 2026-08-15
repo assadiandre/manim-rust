@@ -137,4 +137,6 @@ crates/
 - M26 ImageMobject: authoring-time RGBA decode onto the mobject; vello
   `draw_image` at encode time (no per-frame Python, no extra GPU API).
   ArcPolygon sides are circular arcs baked into a `BezPath`.
+- M27 SVG `<image>` rasters (data-URI PNG/JPEG/GIF/WebP via usvg) and
+  `save_state` / `Restore` as compiled transform+style+path data.
 - M8 (later) 3D spike: cube pass composited under 2D overlay
