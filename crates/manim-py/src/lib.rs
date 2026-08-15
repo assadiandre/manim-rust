@@ -218,6 +218,30 @@ impl PyScene {
             .add(Mobject::new(geometry::rect(Point::new(x, y), width, height)).with_style(style)))
     }
 
+    #[pyo3(signature = (x = 0.0, y = 0.0, width = 3.0, height = 2.0, corner_radius = 0.25, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_rounded_rect(
+        &mut self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        corner_radius: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::rounded_rect(
+                Point::new(x, y),
+                width,
+                height,
+                corner_radius,
+            ))
+            .with_style(style),
+        ))
+    }
+
     #[pyo3(signature = (x = 0.0, y = 0.0, rx = 1.5, ry = 0.8, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
     fn add_ellipse(
         &mut self,
@@ -286,6 +310,32 @@ impl PyScene {
         let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
         Ok(self.scene.add(
             Mobject::new(geometry::annulus(Point::new(x, y), inner, outer)).with_style(style),
+        ))
+    }
+
+    #[pyo3(signature = (x = 0.0, y = 0.0, inner = 0.5, outer = 1.0, start_angle = 0.0, sweep = 1.5707963267948966, fill = None, stroke = Some("white".to_string()), stroke_width = 4.0))]
+    fn add_annular_sector(
+        &mut self,
+        x: f64,
+        y: f64,
+        inner: f64,
+        outer: f64,
+        start_angle: f64,
+        sweep: f64,
+        fill: Option<String>,
+        stroke: Option<String>,
+        stroke_width: f64,
+    ) -> PyResult<usize> {
+        let style = build_style(fill.as_deref(), stroke.as_deref(), stroke_width)?;
+        Ok(self.scene.add(
+            Mobject::new(geometry::annular_sector(
+                Point::new(x, y),
+                inner,
+                outer,
+                start_angle,
+                sweep,
+            ))
+            .with_style(style),
         ))
     }
 
@@ -1180,6 +1230,36 @@ impl PyScene {
             grid_style,
             axis_style,
         ))
+    }
+
+    /// Bake `f(x)` into a polyline (authoring-time only).
+    #[pyo3(signature = (f, x_min, x_max, samples = 80, unit_x = 1.0, unit_y = 1.0, stroke = Some("yellow".to_string()), stroke_width = 5.0, parent = None))]
+    fn add_plot(
+        &mut self,
+        f: Bound<'_, PyAny>,
+        x_min: f64,
+        x_max: f64,
+        samples: usize,
+        unit_x: f64,
+        unit_y: f64,
+        stroke: Option<String>,
+        stroke_width: f64,
+        parent: Option<NodeId>,
+    ) -> PyResult<usize> {
+        let n = samples.max(2);
+        let mut pts = Vec::with_capacity(n);
+        for i in 0..n {
+            let t = i as f64 / (n - 1) as f64;
+            let x = x_min + (x_max - x_min) * t;
+            let y = f.call1((x,))?.extract::<f64>()?;
+            pts.push(Point::new(x * unit_x, y * unit_y));
+        }
+        let style = build_style(None, stroke.as_deref(), stroke_width)?;
+        let mob = Mobject::new(geometry::polyline(&pts)).with_style(style);
+        Ok(match parent {
+            Some(p) => self.scene.graph.add_child(p, mob),
+            None => self.scene.add(mob),
+        })
     }
 
     /// Bake `f(x)` into a filled area under the curve (authoring-time only).
