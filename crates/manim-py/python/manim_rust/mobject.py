@@ -119,6 +119,12 @@ class Mobject:
 
         return self._apply(op)
 
+    def become(self, other):
+        def op(raw, node):
+            raw.become_mobject(node, _node_id(other, raw))
+
+        return self._apply(op)
+
     def generate_target(self):
         self.target = _Target()
         return self.target

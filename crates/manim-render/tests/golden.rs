@@ -134,6 +134,19 @@ fn golden_m22_static() {
 }
 
 #[test]
+fn golden_m28_static() {
+    let mut r = Renderer::new(480, 270, black()).unwrap();
+    let scene = manim_scenes::probes()
+        .into_iter()
+        .find(|p| p.name == "become")
+        .expect("become probe");
+    let mut sim = scene.scene.graph.clone();
+    scene.scene.timeline.apply(&mut sim, 0.0);
+    let px = r.render_frame(&mut sim).unwrap().to_vec();
+    assert_golden(&px, 480, 270, "become.png");
+}
+
+#[test]
 fn golden_m27() {
     let mut r = Renderer::new(480, 270, black()).unwrap();
     let scene = manim_scenes::probes()

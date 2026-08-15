@@ -1234,6 +1234,10 @@ impl PyScene {
         self.scene.graph.restore(target);
     }
 
+    fn become_mobject(&mut self, target: NodeId, other: NodeId) {
+        self.scene.graph.become_mobject(target, other);
+    }
+
     fn children_of(&self, target: NodeId) -> Vec<NodeId> {
         self.scene.graph.children_of(target).to_vec()
     }

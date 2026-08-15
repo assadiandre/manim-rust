@@ -1386,5 +1386,19 @@ pub fn probes() -> Vec<Probe> {
     s.play_restore(home, 1.0);
     out.push(probe("restore", s, &[0.0, 0.5, 1.0]));
 
+    // become: left circle takes the square's path/style, stays put
+    let mut s = Scene::new();
+    let a = s.add(
+        Mobject::new(geometry::circle(Point::new(-2.4, 0.0), 0.45))
+            .with_style(Style::filled(palette::red()).with_stroke(palette::white(), 4.0)),
+    );
+    let b = s.add(
+        Mobject::new(geometry::square(Point::new(2.4, 0.0), 1.8))
+            .with_style(Style::filled(palette::blue()).with_stroke(palette::white(), 4.0)),
+    );
+    s.graph.become_mobject(a, b);
+    s.graph.get_mut(b).visible = false;
+    out.push(probe("become", s, &[0.0]));
+
     out
 }
